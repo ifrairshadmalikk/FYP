@@ -3,11 +3,10 @@ import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from "react-native";
 import styles from "../styles/PassengerStyles";
 
-export default function PassengerRegisterScreen() {
+export default function PassengerRegisterScreen({ navigation }) {
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
 
   const validatePassenger = () => {
     if (!pickup || !dropoff) {
@@ -18,8 +17,12 @@ export default function PassengerRegisterScreen() {
       setErrorMsg("Addresses must be at least 20 characters long.");
       return;
     }
+
+    // ✅ Clear errors
     setErrorMsg("");
-    setSuccessMsg("Passenger registered successfully!");
+
+    // ✅ Navigate to Passenger Transporter Selection Screen
+    navigation.navigate("PassengerTransporterSelection");
   };
 
   return (
@@ -52,7 +55,6 @@ export default function PassengerRegisterScreen() {
       />
 
       {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
-      {successMsg ? <Text style={styles.success}>{successMsg}</Text> : null}
 
       <TouchableOpacity style={styles.submitBtn} onPress={validatePassenger}>
         <Text style={styles.submitText}>Register</Text>

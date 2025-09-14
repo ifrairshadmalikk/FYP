@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from "react-native";
 import styles from "../styles/DriverStyles.js";
 
-export default function DriverRegisterScreen() {
+export default function DriverRegisterScreen({ navigation }) {  // ✅ navigation add
   const [licenseNo, setLicenseNo] = useState("");
   const [location, setLocation] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -24,6 +24,9 @@ export default function DriverRegisterScreen() {
     }
     setErrorMsg("");
     setSuccessMsg("Driver registered successfully!");
+
+    // ✅ Navigate to DriverTransporterSelectionScreen
+    navigation.navigate("DriverTransporterSelection");
   };
 
   return (
@@ -33,7 +36,7 @@ export default function DriverRegisterScreen() {
         source={{
           uri: "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRUGAfyIRqRuM2wrxJKjZcSJw_xHizryOzIFp0f_DWVveuR1HSY",
         }}
-        style={{ width: "100%", height: 180, marginBottom: 20, borderRadius: 10, marginTop:80}}
+        style={{ width: "100%", height: 180, marginBottom: 20, borderRadius: 10, marginTop: 80 }}
         resizeMode="cover"
       />
 
