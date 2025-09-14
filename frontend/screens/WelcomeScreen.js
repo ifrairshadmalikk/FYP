@@ -1,17 +1,27 @@
 // frontend/screens/WelcomeScreen.js
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import styles from "../styles/OnboardingStyles";
 
 export default function WelcomeScreen({ navigation }) {
   return (
     <View style={styles.welcomeContainer}>
+      {/* Logo */}
+      <Image
+        source={require("./Raahi_Logo.png")} 
+        style={styles.welcomeLogo}
+        resizeMode="contain"
+      />
+
+      {/* Title 
       <Text style={styles.welcomeTitle}>Welcome to Raahi</Text>
+        */}
+      {/* Button */}
       <TouchableOpacity
-        style={styles.startButton}
+        style={styles.welcomeButton}
         onPress={() => navigation.navigate("Register Dashboard")}
       >
-        <Text style={styles.startText}>Sign Up / Login</Text>
+        <Text style={styles.startButton}>Sign Up / Login</Text>
       </TouchableOpacity>
     </View>
   );

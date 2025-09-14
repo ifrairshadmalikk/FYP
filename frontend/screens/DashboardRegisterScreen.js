@@ -35,22 +35,70 @@ export default function DashboardRegisterScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.container}>
-     
+      {/* Logo */}
       <Image
-        source={{ uri: "https://cdn.prod.website-files.com/6846c2be8f3d7d1f31b5c7e3/6846e5d971c7bbaa7308cb70_img.webp" }} // ⚠️ Works only if SVG converted to PNG/JPG
-        style={{ width: 500, height: 200, alignSelf: "center", marginBottom: -1, marginTop: 18}}
+        source={{ uri: "https://cdn.prod.website-files.com/6846c2be8f3d7d1f31b5c7e3/6846e5d971c7bbaa7308cb70_img.webp" }}
+        style={{ width: 500, height: 200, alignSelf: "center", marginBottom: -1, marginTop: 18 }}
         resizeMode="contain"
       />
 
       <Text style={styles.title}>Common Registration</Text>
 
-      <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#999" value={email} onChangeText={setEmail} />
-      <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#999" secureTextEntry value={password} onChangeText={setPassword} />
-      <TextInput style={styles.input} placeholder="Confirm Password" placeholderTextColor="#999" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
-      <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor="#999" value={name} onChangeText={setName} />
-      <TextInput style={styles.input} placeholder="Mobile Number" placeholderTextColor="#999" keyboardType="numeric" value={mobile} onChangeText={setMobile} />
-      <TextInput style={styles.input} placeholder="CNIC (13 digits, no dashes)" placeholderTextColor="#999" keyboardType="numeric" value={cnic} onChangeText={setCnic} />
+      {/* For Now Section */}
+      <View style={styles.sectionBox}>
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          placeholderTextColor="#999"
+          value={name}
+          onChangeText={setName}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Mobile Number"
+          placeholderTextColor="#999"
+          keyboardType="numeric"
+          value={mobile}
+          onChangeText={setMobile}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="CNIC (13 digits, no dashes)"
+          placeholderTextColor="#999"
+          keyboardType="numeric"
+          value={cnic}
+          onChangeText={setCnic}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#999"
+          value={email}
+          onChangeText={setEmail}
+        />
+      </View>
 
+      {/* For Next Section */}
+      <View style={styles.sectionBox}>
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#999"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Confirm Password"
+          placeholderTextColor="#999"
+          secureTextEntry
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
+      </View>
+
+      {/* Role Picker */}
       <View style={styles.pickerBox}>
         <Picker selectedValue={role} onValueChange={(value) => setRole(value)}>
           <Picker.Item label="Select Role" value="" />
@@ -60,11 +108,13 @@ export default function DashboardRegisterScreen({ navigation }) {
         </Picker>
       </View>
 
+      {/* Error Message */}
       {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
 
+      {/* Submit */}
       <TouchableOpacity style={styles.submitBtn} onPress={validateCommon}>
         <Text style={styles.submitText}>Next</Text>
       </TouchableOpacity>
     </ScrollView>
   );
-}
+};
