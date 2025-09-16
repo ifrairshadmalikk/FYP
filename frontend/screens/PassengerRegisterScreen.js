@@ -1,4 +1,3 @@
-// screens/PassengerRegisterScreen.js
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from "react-native";
 import styles from "../styles/PassengerStyles";
@@ -26,13 +25,15 @@ export default function PassengerRegisterScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* 👇 Added Image at top */}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+      >      {/* 👇 Responsive Image at top */}
       <Image
         source={{
           uri: "https://cdn.prod.website-files.com/6846c2be8f3d7d1f31b5c7e3/6846e5d9563c66af7dc80df8_image.webp",
         }}
-        style={{ width: "100%", height: 180, marginBottom: 20, borderRadius: 10 }}
+        style={styles.image}
         resizeMode="cover"
       />
 
