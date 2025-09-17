@@ -1,66 +1,73 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, LayoutAnimation } from "react-native";
 import * as Location from "expo-location";
+import * as Localization from "expo-localization";
 
 export default function AttendanceScreen() {
     const [status, setStatus] = useState("Pending");
     const [deadlinePassed, setDeadlinePassed] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // ⏰ Check deadline using device location & time
     useEffect(() => {
-        (async () => {
+        const fetchLocationAndCheckTime = async () => {
             try {
-                // Request location permissions
-                let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
-                if (locStatus !== "granted") {
-                    Alert.alert("Permission Denied", "Location access is needed for proper timing.");
-                    setLoading(false);
+                let { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== "granted") {
+                    console.log("Permission denied");
+                    setLoading(false); // 👈 yahan loading hata do
                     return;
                 }
 
+                let location = await Location.getCurrentPositionAsync({});
+                console.log("Location:", location);
+
+                const now = new Date();
+
+                // 👇 deadline midnight set
+                const deadline = new Date();
+                deadline.setHours(0, 0, 0, 0);
+
+                // agar agle din ki midnight chahiye
+                deadline.setDate(deadline.getDate() + 1);
+
+                console.log("Now:", now.toString());
+                console.log("Deadline:", deadline.toString());
+
+                if (now > deadline) {
+                    setStatus("Deadline Passed");
+                } else {
+                    setStatus("Pending Response");
+                }
+
+                setLoading(false); // 👈 last me screen render ke liye
+            } catch (err) {
+                console.error("Error:", err);
                 setLoading(false);
-
-                // Function to check deadline
-                const checkDeadline = () => {
-                    const now = new Date();
-                    const deadline = new Date();
-                    deadline.setHours(12, 0, 0, 0); // 12 PM today
-
-                    if (now > deadline && status === "Pending") {
-                        setStatus("No - Not Traveling");
-                        setDeadlinePassed(true);
-                    }
-                };
-
-                // Initial check
-                checkDeadline();
-
-                // Check every minute
-                const interval = setInterval(checkDeadline, 60000);
-                return () => clearInterval(interval);
-            } catch (error) {
-                console.error("Error fetching location:", error);
             }
-        })();
-    }, [status]);
+        };
+
+        fetchLocationAndCheckTime();
+    }, []);
 
     const handleResponse = (response) => {
-        if (deadlinePassed) return; // Prevent after deadline
+        if (deadlinePassed) return;
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setStatus(response);
     };
 
-    // Status color helper
     const getStatusColor = () => {
-        if (status === "Yes - Traveling") return "#afd826"; // App primary
-        if (status === "No - Not Traveling") return "#f87171"; // Red
-        return "#f59e0b"; // Pending (orange)
+        if (status === "Yes - Traveling") return "#afd826";
+        if (status === "No - Not Traveling") return "#f87171";
+        return "#f59e0b";
     };
 
     if (loading) {
         return (
             <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-                <Text style={{ fontSize: 18, color: "#555" }}>Loading...</Text>
+                <ActivityIndicator size="large" color="#afd826" />
+                <Text style={{ fontSize: 16, marginTop: 10, color: "#555" }}>
+                    Preparing your check-in...
+                </Text>
             </View>
         );
     }
@@ -70,8 +77,8 @@ export default function AttendanceScreen() {
             <Text style={styles.heading}>🗓 Travel Check-in</Text>
             <Text style={styles.subText}>Will you travel tomorrow? (Respond before 12:00 PM)</Text>
 
-            {/* Buttons */}
             <TouchableOpacity
+                activeOpacity={0.7}
                 style={[styles.button, { backgroundColor: "#afd826" }]}
                 onPress={() => handleResponse("Yes - Traveling")}
                 disabled={deadlinePassed || status === "Yes - Traveling"}
@@ -80,6 +87,7 @@ export default function AttendanceScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+                activeOpacity={0.7}
                 style={[styles.button, { backgroundColor: "#f87171" }]}
                 onPress={() => handleResponse("No - Not Traveling")}
                 disabled={deadlinePassed || status === "No - Not Traveling"}
@@ -87,12 +95,12 @@ export default function AttendanceScreen() {
                 <Text style={styles.btnText}>No</Text>
             </TouchableOpacity>
 
-            {/* Current Status */}
-            <Text style={[styles.statusText, { color: getStatusColor() }]}>
-                Current Status: {status}
-            </Text>
+            <View style={[styles.statusCard, { borderColor: getStatusColor() }]}>
+                <Text style={[styles.statusText, { color: getStatusColor() }]}>
+                    Current Status: {status}
+                </Text>
+            </View>
 
-            {/* Alerts */}
             {status === "Pending" && !deadlinePassed && (
                 <Text style={styles.alertText}>
                     ⚠ If no response till 12:00 PM → Marked as Not Traveling
@@ -111,13 +119,20 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#fff", padding: 16 },
     heading: { fontSize: 22, fontWeight: "700", marginBottom: 8, color: "#111" },
     subText: { fontSize: 16, marginBottom: 20, color: "#555" },
-    button: {
-        marginTop: 12,
-        paddingVertical: 14,
-        borderRadius: 10,
-        alignItems: "center",
-    },
+    button: { marginTop: 12, paddingVertical: 14, borderRadius: 10, alignItems: "center" },
     btnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-    statusText: { marginTop: 25, fontSize: 18, fontWeight: "600" },
+    statusCard: {
+        marginTop: 25,
+        padding: 15,
+        borderRadius: 12,
+        borderWidth: 2,
+        alignItems: "center",
+        backgroundColor: "#f9f9f9",
+        shadowColor: "#000",
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    statusText: { fontSize: 18, fontWeight: "600" },
     alertText: { marginTop: 10, fontSize: 14, color: "#f87171" },
 });
