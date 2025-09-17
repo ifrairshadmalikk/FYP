@@ -8,8 +8,8 @@ export default function TransporterDashboard({ navigation }) {
 
       {/* Stats */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Active Vans: 5</Text>
-        <Text>Drivers: 12 | Passengers: 60</Text>
+        <Text style={styles.cardTitle}>Active Vans: 10</Text>
+        <Text>Ative Drivers: 12 | Passengers: 60</Text>
       </View>
 
       {/* Navigation */}
