@@ -1,209 +1,83 @@
-// frontend/screens/TransporterRegisterScreen.js
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-} from "react-native";
-import styles from "../styles/TransporterStyles";
+import React from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from "react-native";
 
-export default function TransporterRegisterScreen({ navigation }) {
-  // Common fields
-  const [fullName, setFullName] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [cnic, setCnic] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+const { width } = Dimensions.get("window");
 
-  // Transporter specific
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
-  const [zone, setZone] = useState("");
-
-  // Messages
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-
-  const validateTransporter = () => {
-    // --- Common Validations ---
-    if (
-      !fullName ||
-      !mobile ||
-      !cnic ||
-      !email ||
-      !password ||
-      !confirmPassword ||
-      !country ||
-      !city ||
-      !zone
-    ) {
-      setErrorMsg("All fields are required.");
-      return;
-    }
-
-    // Full Name
-    const nameRegex = /^[A-Za-z\s]{1,50}$/;
-    if (!nameRegex.test(fullName)) {
-      setErrorMsg(
-        "Please enter a valid name using letters only. Special characters and digits are not allowed."
-      );
-      return;
-    }
-
-    // Mobile
-    if (!/^\d{11}$/.test(mobile)) {
-      setErrorMsg(
-        "Mobile number must contain digits only and must be exactly 11 digits long."
-      );
-      return;
-    }
-
-    // CNIC
-    if (!/^\d{13}$/.test(cnic)) {
-      setErrorMsg(
-        "Please enter a valid CNIC number consisting of exactly 13 digits and with no dashes."
-      );
-      return;
-    }
-
-    // Email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setErrorMsg("Invalid email format. Please enter a valid email address.");
-      return;
-    }
-
-    // Password
-    const passRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,16}$/;
-    if (!passRegex.test(password)) {
-      setErrorMsg(
-        "Password must be 8-16 characters long and contain an uppercase letter, a digit, and a special character."
-      );
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMsg("Passwords do not match.");
-      return;
-    }
-
-    // --- Transporter Specific ---
-    const zoneRegex = /^[A-Za-z0-9,\s]{1,100}$/;
-    if (
-      !zoneRegex.test(country) ||
-      !zoneRegex.test(city) ||
-      !zoneRegex.test(zone)
-    ) {
-      setErrorMsg(
-        "Country, city, and zone must be 1-100 characters long and may only contain letters, digits, and commas."
-      );
-      return;
-    }
-
-    // ✅ Success
-    setErrorMsg("");
-    setSuccessMsg("Registered successfully.");
-    // TODO: send data to backend API
-    setTimeout(() => {
-      navigation.navigate("LoginScreen");
-    }, 1500);
-  };
-
+export default function TransporterDashboard({ navigation }) {
   return (
     <ScrollView style={styles.container}>
-      <Image source={require("./transporter.png")} style={styles.image} />
+      {/* Header */}
+      <Text style={styles.header}>Transporter Dashboard</Text>
 
-      <Text style={styles.title}>Transporter Registration</Text>
+      {/* Overview Cards */}
+      <View style={styles.cardRow}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Active Vans</Text>
+          <Text style={styles.cardValue}>05</Text>
+        </View>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Drivers</Text>
+          <Text style={styles.cardValue}>12</Text>
+        </View>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Passengers</Text>
+          <Text style={styles.cardValue}>60</Text>
+        </View>
+      </View>
 
-      {/* Full Name */}
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name"
-        value={fullName}
-        onChangeText={setFullName}
-      />
-
-      {/* Mobile */}
-      <TextInput
-        style={styles.input}
-        placeholder="Mobile Number"
-        keyboardType="number-pad"
-        value={mobile}
-        onChangeText={setMobile}
-      />
-
-      {/* CNIC */}
-      <TextInput
-        style={styles.input}
-        placeholder="CNIC (13 digits)"
-        keyboardType="number-pad"
-        value={cnic}
-        onChangeText={setCnic}
-      />
-
-      {/* Email */}
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-
-      {/* Password */}
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-
-      {/* Confirm Password */}
-      <TextInput
-        style={styles.input}
-        placeholder="Confirm Password"
-        secureTextEntry
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-      />
-
-      {/* Country */}
-      <TextInput
-        style={styles.input}
-        placeholder="Country"
-        value={country}
-        onChangeText={setCountry}
-      />
-
-      {/* City */}
-      <TextInput
-        style={styles.input}
-        placeholder="City"
-        value={city}
-        onChangeText={setCity}
-      />
-
-      {/* Zone */}
-      <TextInput
-        style={styles.input}
-        placeholder="Zone"
-        value={zone}
-        onChangeText={setZone}
-      />
-
-      {/* Messages */}
-      {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
-      {successMsg ? <Text style={styles.success}>{successMsg}</Text> : null}
-
-      {/* Register Button */}
-      <TouchableOpacity style={styles.submitBtn} onPress={validateTransporter}>
-        <Text style={styles.submitText}>Register</Text>
-      </TouchableOpacity>
+      {/* Quick Actions */}
+      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <View style={styles.actions}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("Add Driver")}>
+          <Text style={styles.actionText}>Add Driver</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("Add Passenger")}>
+          <Text style={styles.actionText}>Add Passenger</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("Manage Records")}>
+          <Text style={styles.actionText}>Manage Records</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("Payments")}>
+          <Text style={styles.actionText}>Payments</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("Van Tracking")}>
+          <Text style={styles.actionText}>Van Tracking</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("Alerts")}>
+          <Text style={styles.actionText}>Alerts</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#ffffff", padding: 20 },
+  header: { fontSize: 24, fontWeight: "700", color: "#111827", marginBottom: 25, textAlign: "center" },
+
+  cardRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20 },
+  card: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    padding: 15,
+    borderRadius: 10,
+    marginHorizontal: 5,
+    borderWidth: 1.5,
+    borderColor: "#111827",
+  },
+  cardTitle: { fontSize: 14, color: "#111827", marginBottom: 5 },
+  cardValue: { fontSize: 20, fontWeight: "bold", color: "#111827" },
+
+  sectionTitle: { fontSize: 18, fontWeight: "600", marginVertical: 15, color: "#111827" },
+
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  actionBtn: {
+    backgroundColor: "#afd826",
+    paddingVertical: 16,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 12,
+    width: width * 0.44, // two buttons per row
+  },
+  actionText: { color: "#ffffff", fontWeight: "700", fontSize: 16 },
+});
