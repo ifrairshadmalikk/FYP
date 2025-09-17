@@ -85,17 +85,17 @@ export default function TransporterDashboard({ navigation }) {
             <Text style={styles.cardTitle}>Overview</Text>
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
-                <Ionicons name="car-outline" size={28} color="#afd826" />
+                <Ionicons name="car-outline" size={28} color="#000" />
                 <Text style={styles.statNumber}>05</Text>
                 <Text style={styles.statLabel}>Active Vans</Text>
               </View>
               <View style={styles.statBox}>
-                <Ionicons name="people-outline" size={28} color="#afd826" />
+                <Ionicons name="people-outline" size={28} color="#000" />
                 <Text style={styles.statNumber}>12</Text>
                 <Text style={styles.statLabel}>Drivers</Text>
               </View>
               <View style={styles.statBox}>
-                <Ionicons name="person-outline" size={28} color="#afd826" />
+                <Ionicons name="person-outline" size={28} color="#000" />
                 <Text style={styles.statNumber}>60</Text>
                 <Text style={styles.statLabel}>Passengers</Text>
               </View>
@@ -239,7 +239,6 @@ export default function TransporterDashboard({ navigation }) {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -258,14 +257,35 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: width * 0.05, fontWeight: "700", color: "#FFFFFF" },
   scrollContent: { padding: 15 },
-  statsCard: { backgroundColor: "#fff", marginBottom: 20, padding: 20, borderRadius: 12, elevation: 3 },
+
+  // Overview / Stats Card
+  statsCard: { 
+    backgroundColor: "#fff", 
+    marginBottom: 20, 
+    padding: 20, 
+    borderRadius: 12, 
+    elevation: 3, 
+    borderWidth: 1, 
+    borderColor: "#afd826"   // تھیم کلر کے مطابق بارڈر
+  },
   cardTitle: { fontSize: 16, fontWeight: "600", marginBottom: 10, color: "#333" },
   statsRow: { flexDirection: "row", justifyContent: "space-between" },
   statBox: { alignItems: "center", flex: 1 },
-  statNumber: { fontSize: 18, fontWeight: "700", marginTop: 6, color: "#000" },
+  statNumber: { fontSize: 18, fontWeight: "700", marginTop: 6, color: "#000" }, // آئیکن کے ساتھ match
   statLabel: { fontSize: 14, color: "#555", marginTop: 2 },
-  section: { backgroundColor: "#fff", padding: 20, borderRadius: 12, marginBottom: 15, elevation: 3 },
+
+  // Quick Actions Section
+  section: { 
+    backgroundColor: "#fff", 
+    padding: 20, 
+    borderRadius: 12, 
+    marginBottom: 15, 
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: "#afd826"   // تھیم کلر کے مطابق بارڈر
+  },
   sectionTitle: { fontSize: 16, fontWeight: "600", marginBottom: 15, color: "#333" },
+
   menuItem: { flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f0f0f0" },
   menuText: { fontSize: 15, marginLeft: 12, color: "#333" },
   menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" },
@@ -273,6 +293,10 @@ const styles = StyleSheet.create({
   sidebarTitle: { fontSize: 20, fontWeight: "700", marginBottom: 20, color: "#111827" },
   itemRow: { marginBottom: 8 },
   bold: { fontWeight: "600" },
+
   downloadBtn: { backgroundColor: "#afd826", padding: 12, borderRadius: 8, alignItems: "center", marginTop: 15 },
   downloadText: { color: "#fff", fontWeight: "700" },
+
+
+  iconColor: { color: "#000" } 
 });
