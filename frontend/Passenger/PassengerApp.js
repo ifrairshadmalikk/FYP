@@ -69,7 +69,7 @@ export default function PassengerApp() {
                 }}
             />
             <Drawer.Screen
-                name="Attendance"
+                name="Travel Check-In"
                 component={AttendanceScreen}
                 options={{
                     drawerIcon: ({ color, size }) => (
