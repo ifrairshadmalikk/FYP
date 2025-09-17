@@ -38,8 +38,8 @@ export default function DashboardRegisterScreen({ navigation }) {
 
     setErrorMsg("");
 
-    if (role === "Passenger") navigation.navigate("Passenger Register");
-    if (role === "Driver") navigation.navigate("Driver Register");
+    if (role === "Passenger") navigation.navigate("PassengerRegister");
+    if (role === "Driver") navigation.navigate("DriverRegister");
     if (role === "Transporter") navigation.navigate("Transporter Register");
   };
 
@@ -52,7 +52,7 @@ export default function DashboardRegisterScreen({ navigation }) {
         resizeMode="contain"
       />
 
-      <Text style={styles.title}>Common Registration</Text>
+      <Text style={styles.title}>Registration</Text>
 
       {/* Step 1 */}
       {step === 1 && (

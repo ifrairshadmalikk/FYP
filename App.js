@@ -32,10 +32,11 @@ export default function App() {
         <Stack.Screen name="Login" component={LoginScreen} />
 
         {/* Registration Flow */}
-        <Stack.Screen name="DashboardRegister" component={DashboardRegisterScreen} />
+    <Stack.Screen name="DashboardRegisterScreen" component={DashboardRegisterScreen} />
         <Stack.Screen name="PassengerRegister" component={PassengerRegisterScreen} />
         <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
-        <Stack.Screen name="TransporterRegister" component={TransporterRegisterScreen} />
+        <Stack.Screen  name="Transporter Register"  component={TransporterRegisterScreen}/>
+
 
         {/* Selection Screens */}
         <Stack.Screen

@@ -7,21 +7,24 @@ export default function WelcomeScreen({ navigation }) {
   return (
     <View style={styles.welcomeContainer}>
       {/* Logo */}
-      <Image
-        source={require("./Raahi_Logo.png")} 
-        style={styles.welcomeLogo}
-        resizeMode="contain"
-      />
+   {/* Logo */}
+<Image
+  source={require("./Raahi_Logo.png")}
+  style={styles.welcomeLogo}
+  resizeMode="contain"
+/>
 
-      {/* Title 
+
+
+      {/* Title */}
       <Text style={styles.welcomeTitle}>Welcome to Raahi</Text>
-        */}
+
       {/* Button */}
       <TouchableOpacity
         style={styles.welcomeButton}
-        onPress={() => navigation.navigate("Login")}
+        onPress={() => navigation.navigate("DashboardRegisterScreen")}
       >
-        <Text style={styles.startButton}>Sign Up / Login</Text>
+        <Text style={styles.startButton}>Join Now</Text>
       </TouchableOpacity>
     </View>
   );
