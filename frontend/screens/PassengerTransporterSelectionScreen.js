@@ -40,7 +40,7 @@ export default function PassengerTransporterSelectionScreen({ navigation }) {
 
     setTimeout(() => {
       setIsLoading(false);
-      navigation.navigate("Login");
+      navigation.navigate("PassengerApp");
     }, 2000);
   };
 

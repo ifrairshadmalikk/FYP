@@ -26,7 +26,7 @@ export default function LoginScreen({ navigation }) {
         setErrorMsg("");
 
         // ✅ Navigate to Dashboard/Home
-        navigation.navigate("PassengerApp");
+        navigation.navigate("PassengerTransporterSelection");
     };
 
     return (
