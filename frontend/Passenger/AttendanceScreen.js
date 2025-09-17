@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, LayoutAnimation } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, LayoutAnimation, TextInput } from "react-native";
 import * as Location from "expo-location";
-import * as Localization from "expo-localization";
 
 export default function AttendanceScreen() {
     const [status, setStatus] = useState("Pending");
     const [deadlinePassed, setDeadlinePassed] = useState(false);
     const [loading, setLoading] = useState(true);
+
+    // extra states for time input
+    const [departureTime, setDepartureTime] = useState("");
+    const [returnTime, setReturnTime] = useState("");
 
     useEffect(() => {
         const fetchLocationAndCheckTime = async () => {
@@ -14,38 +17,31 @@ export default function AttendanceScreen() {
                 let { status } = await Location.requestForegroundPermissionsAsync();
                 if (status !== "granted") {
                     console.log("Permission denied");
-                    setLoading(false); // 👈 yahan loading hata do
+                    setLoading(false);
                     return;
                 }
 
-                let location = await Location.getCurrentPositionAsync({});
-                console.log("Location:", location);
-
+                await Location.getCurrentPositionAsync({});
                 const now = new Date();
 
-                // 👇 deadline midnight set
+                // deadline 12:00 AM
                 const deadline = new Date();
                 deadline.setHours(0, 0, 0, 0);
-
-                // agar agle din ki midnight chahiye
                 deadline.setDate(deadline.getDate() + 1);
 
-                console.log("Now:", now.toString());
-                console.log("Deadline:", deadline.toString());
-
                 if (now > deadline) {
+                    setDeadlinePassed(true);
                     setStatus("Deadline Passed");
                 } else {
+                    setDeadlinePassed(false);
                     setStatus("Pending Response");
                 }
-
-                setLoading(false); // 👈 last me screen render ke liye
+                setLoading(false);
             } catch (err) {
                 console.error("Error:", err);
                 setLoading(false);
             }
         };
-
         fetchLocationAndCheckTime();
     }, []);
 
@@ -75,8 +71,9 @@ export default function AttendanceScreen() {
     return (
         <View style={styles.container}>
             <Text style={styles.heading}>🗓 Travel Check-in</Text>
-            <Text style={styles.subText}>Will you travel tomorrow? (Respond before 12:00 PM)</Text>
+            <Text style={styles.subText}>Will you travel tomorrow? (Respond before 12:00 AM)</Text>
 
+            {/* Yes Button */}
             <TouchableOpacity
                 activeOpacity={0.7}
                 style={[styles.button, { backgroundColor: "#afd826" }]}
@@ -86,6 +83,7 @@ export default function AttendanceScreen() {
                 <Text style={styles.btnText}>Yes</Text>
             </TouchableOpacity>
 
+            {/* No Button */}
             <TouchableOpacity
                 activeOpacity={0.7}
                 style={[styles.button, { backgroundColor: "#f87171" }]}
@@ -95,6 +93,44 @@ export default function AttendanceScreen() {
                 <Text style={styles.btnText}>No</Text>
             </TouchableOpacity>
 
+            {/* Show Time Inputs if user selected Yes */}
+            {status === "Yes - Traveling" && !deadlinePassed && (
+                <View style={{ marginTop: 20 }}>
+                    <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 8 }}>Enter your travel times:</Text>
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Departure Time (e.g. 8:00 AM)"
+                        value={departureTime}
+                        onChangeText={setDepartureTime}
+                    />
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Return Time (e.g. 5:00 PM)"
+                        value={returnTime}
+                        onChangeText={setReturnTime}
+                    />
+
+                    <TouchableOpacity
+                        style={[styles.button, { backgroundColor: "#46eb25ff" }]}
+                        onPress={() =>
+                            Alert.alert(
+                                "Confirm Travel Times",
+                                `📍 Departure: ${departureTime || "Not Selected"}\n🏠 Return: ${returnTime || "Not Selected"}`,
+                                [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Confirm", onPress: () => Alert.alert("✅ Saved", "Your travel times are saved!") },
+                                ]
+                            )
+                        }
+                    >
+                        <Text style={styles.btnText}>Save Times</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Status Card */}
             <View style={[styles.statusCard, { borderColor: getStatusColor() }]}>
                 <Text style={[styles.statusText, { color: getStatusColor() }]}>
                     Current Status: {status}
@@ -103,9 +139,10 @@ export default function AttendanceScreen() {
 
             {status === "Pending" && !deadlinePassed && (
                 <Text style={styles.alertText}>
-                    ⚠ If no response till 12:00 PM → Marked as Not Traveling
+                    ⚠ If no response till 12:00 AM → Marked as Not Traveling
                 </Text>
             )}
+
             {deadlinePassed && (
                 <Text style={styles.alertText}>
                     ❌ Deadline passed! Auto-marked as "Not Traveling"
@@ -135,4 +172,12 @@ const styles = StyleSheet.create({
     },
     statusText: { fontSize: 18, fontWeight: "600" },
     alertText: { marginTop: 10, fontSize: 14, color: "#f87171" },
+    input: {
+        borderWidth: 1,
+        borderColor: "#ccc",
+        borderRadius: 8,
+        padding: 10,
+        marginBottom: 12,
+        fontSize: 16,
+    },
 });
