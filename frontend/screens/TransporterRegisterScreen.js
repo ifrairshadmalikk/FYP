@@ -115,7 +115,7 @@ export default function TransporterDashboard({ navigation }) {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => navigation.navigate("Add Passenger")}
+              onPress={() => navigation.navigate("AddPassenger")}
             >
               <Ionicons name="person-circle-outline" size={22} color="#333" />
               <Text style={styles.menuText}>Add Passenger</Text>
