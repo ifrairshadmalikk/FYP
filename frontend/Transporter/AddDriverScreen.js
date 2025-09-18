@@ -9,6 +9,8 @@ import {
   StatusBar,
   Platform,
   SafeAreaView,
+  Clipboard,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -22,6 +24,7 @@ export default function AddDriverScreen({ navigation }) {
   const [location, setLocation] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
 
   const validateDriver = () => {
     const nameRegex = /^[A-Za-z\s]{1,50}$/;
@@ -45,8 +48,16 @@ export default function AddDriverScreen({ navigation }) {
         "Location must be 20-100 chars, letters/digits/commas only."
       );
 
+    // If all validation passes
     setErrorMsg("");
-    setSuccessMsg("✅ Driver added successfully!");
+    const link = `https://Raahi.com/invite/${Date.now()}`;
+    setInviteLink(link);
+    setSuccessMsg(`Driver added successfully! Invite link generated below.`);
+  };
+
+  const copyLink = () => {
+    Clipboard.setString(inviteLink);
+    Alert.alert("Copied", "Invite link copied to clipboard!");
   };
 
   return (
@@ -64,8 +75,7 @@ export default function AddDriverScreen({ navigation }) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Driver</Text>
-        <View style={{ width: 24 }} /> 
-        {/* Empty view for spacing so title stays centered */}
+        <View style={{ width: 24 }} />
       </View>
 
       {/* Content */}
@@ -125,6 +135,12 @@ export default function AddDriverScreen({ navigation }) {
         {successMsg ? (
           <View style={styles.msgBoxSuccess}>
             <Text style={styles.success}>{successMsg}</Text>
+            {inviteLink ? (
+              <TouchableOpacity style={styles.linkBox} onPress={copyLink}>
+                <Text style={styles.linkText}>{inviteLink}</Text>
+                <Ionicons name="copy-outline" size={18} color="#28a745" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : null}
 
@@ -196,5 +212,16 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   error: { color: "#d9534f", fontSize: 14 },
-  success: { color: "#28a745", fontSize: 14 },
+  success: { color: "#28a745", fontSize: 14, marginBottom: 6 },
+  linkBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0fff4",
+    padding: 8,
+    borderRadius: 8,
+  },
+  linkText: {
+    color: "#28a745",
+    fontSize: 14,
+  },
 });

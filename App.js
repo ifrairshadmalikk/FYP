@@ -81,19 +81,16 @@ export default function App() {
         {/* Transporter Screens */}
         
         <Stack.Screen name="Add Driver" component={AddDriverScreen} />
-        <Stack.Screen name="Add Passenger" component={AddPassengerScreen} />
-        <Stack.Screen name="Manage Records" component={ManageRecordsScreen} />
-        
+          
         <Stack.Screen name="Van Tracking" component={VanTrackingScreen} />
-       
-      
+         
         <Stack.Screen name="PassengerList" component={PassengerList} />
         <Stack.Screen name="DriverList" component={DriverList} />
-        <Stack.Screen name="AddDriver" component={AddDriver} />
+        
         <Stack.Screen name="AddPassenger" component={AddPassenger} />
         <Stack.Screen name="ManageRecords" component={ManageRecords} />
         <Stack.Screen name="Payments" component={Payments} />
-        <Stack.Screen name="VanTracking" component={VanTracking} />
+       
         <Stack.Screen name="Alerts" component={Alerts} />
         <Stack.Screen name="DriverPerformance" component={DriverPerformance} />
         <Stack.Screen name="PassengerPerformance" component={PassengerPerformance} />
