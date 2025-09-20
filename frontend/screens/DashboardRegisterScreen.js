@@ -14,11 +14,11 @@ export default function DashboardRegisterScreen({ navigation }) {
     }
     setErrorMsg("");
 
-<<<<<<< HEAD
+
     if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
-=======
+
     if (role === "Passenger") navigation.navigate("PassengerApp");
->>>>>>> 7a96e9e8d063781890aa5acb81df597ca617cc34
+
     if (role === "Driver") navigation.navigate("DriverRegister");
     if (role === "Transporter") navigation.navigate("TransporterRegister");
   };
