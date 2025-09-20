@@ -22,7 +22,7 @@ export default function WelcomeScreen({ navigation }) {
       {/* Button */}
       <TouchableOpacity
         style={styles.welcomeButton}
-        onPress={() => navigation.navigate("DashboardRegisterScreen")}
+        onPress={() => navigation.navigate("DashboardRegister")}
       >
         <Text style={styles.startButton}>Join Now</Text>
       </TouchableOpacity>

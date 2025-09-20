@@ -50,7 +50,7 @@ export default function AddDriverScreen({ navigation }) {
 
     // If all validation passes
     setErrorMsg("");
-    const link = `https://Raahi.com/invite/${Date.now()}`;
+    const link = `https://raahi-app.com/invite?token=abcd1234`;
     setInviteLink(link);
     setSuccessMsg(`Driver added successfully! Invite link generated below.`);
   };

@@ -51,7 +51,7 @@ export default function AddPassenger({ navigation }) {
 
     // If all validation passes
     setErrorMsg("");
-    const link = `https://yourapp.com/invite/passenger/${Date.now()}`;
+    const link = `https://raahi-app.com/invite?token=abcd1234`;
     setInviteLink(link);
     setSuccessMsg(`Passenger added successfully! Invite link generated below.`);
   };

@@ -1,69 +1,87 @@
-// screens/DriverRegisterScreen.js
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from "react-native";
-import styles from "../styles/DriverStyles.js";
+// screens/LoginScreen.js
+import React, { useEffect, useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, Image, ScrollView } from "react-native";
+import styles from "../styles/DashboardStyles"; // Reuse same style for consistency
 
-export default function DriverRegisterScreen({ navigation }) {  // ✅ navigation add
-  const [licenseNo, setLicenseNo] = useState("");
-  const [location, setLocation] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+export default function LoginScreen({ navigation, route }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [inviteToken, setInviteToken] = useState(null);
 
-  const validateDriver = () => {
-    if (!licenseNo || !location) {
-      setErrorMsg("All fields are required.");
-      return;
+  // ✅ get token from deep link
+  useEffect(() => {
+    if (route.params?.token) {
+      setInviteToken(route.params.token);
     }
-    if (!/^[A-Za-z]{1,}-\d{4,}$/.test(licenseNo)) {
-      setErrorMsg("Enter a valid license number e.g. LHR-12345678");
-      return;
-    }
-    if (location.length < 20) {
-      setErrorMsg("Location must be at least 20 characters long.");
-      return;
-    }
-    setErrorMsg("");
-    setSuccessMsg("Driver registered successfully!");
+  }, [route.params]);
 
-    // ✅ Navigate to DriverTransporterSelectionScreen
-    navigation.navigate("DriverTransporterSelection");
+  const handleLogin = () => {
+    if (inviteToken) {
+      // ✅ invite flow
+      console.log("Driver invited with token:", inviteToken);
+      navigation.navigate("DriverRegister", { token: inviteToken });
+    } else {
+      // ✅ normal login flow
+      navigation.navigate("Dashboard");
+    }
   };
 
   return (
     <ScrollView style={styles.container}>
-      {/* 👇 Image Added */}
+      {/* 👇 App Logo */}
       <Image
         source={{
-          uri: "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRUGAfyIRqRuM2wrxJKjZcSJw_xHizryOzIFp0f_DWVveuR1HSY",
+          uri: "https://cdn.prod.website-files.com/6846c2be8f3d7d1f31b5c7e3/6846e5d971c7bbaa7308cb70_img.webp",
         }}
-        style={{ width: "100%", height: 180, marginBottom: 20, borderRadius: 10, marginTop: 80 }}
-        resizeMode="cover"
+        style={styles.logo}
+        resizeMode="contain"
       />
 
-      <Text style={styles.title}>Driver Registration</Text>
+      {/* Title */}
+      <Text style={styles.title}>Driver Login</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="License Number"
-        placeholderTextColor="#999"
-        value={licenseNo}
-        onChangeText={setLicenseNo}
-      />
+      {/* Guidance Message */}
+      <Text style={{ textAlign: "center", color: "#444", marginBottom: 25, fontSize: 15, lineHeight: 22 }}>
+        Please login using the credentials shared by your Transporter.{"\n"}
+        Or, if you received an <Text style={{ fontWeight: "bold", color: "#ff6600" }}>invite link</Text>, 
+        simply continue with that.
+      </Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Current Location"
-        placeholderTextColor="#999"
-        value={location}
-        onChangeText={setLocation}
-      />
+      {/* Input Fields */}
+      <View style={styles.sectionBox}>
+        <TextInput
+          style={styles.input}
+          placeholder="Email Address"
+          placeholderTextColor="#999"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
 
-      {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
-      {successMsg ? <Text style={styles.success}>{successMsg}</Text> : null}
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#999"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+      </View>
 
-      <TouchableOpacity style={styles.submitBtn} onPress={validateDriver}>
-        <Text style={styles.submitText}>Register</Text>
+      {/* Submit Button */}
+      <TouchableOpacity style={styles.submitBtn} onPress={handleLogin}>
+        <Text style={styles.submitText}>Login</Text>
       </TouchableOpacity>
+
+      {/* Invite Token Info */}
+      {inviteToken && (
+        <View style={{ marginTop: 20, padding: 12, backgroundColor: "#e6ffed", borderRadius: 8 }}>
+          <Text style={{ color: "#2e7d32", textAlign: "center", fontWeight: "600" }}>
+            Invite link detected. Continue your registration.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
