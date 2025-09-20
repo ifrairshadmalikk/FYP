@@ -36,12 +36,13 @@ export default function Onboarding({ navigation }) {
     if (currentIndex < slides.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      navigation.navigate("Welcome");
+      // ✅ Last slide → DashboardRegister screen
+      navigation.replace("DashboardRegister");
     }
   };
 
   const handleSkip = () => {
-    navigation.navigate("Welcome");
+    navigation.replace("DashboardRegister");
   };
 
   const { title, subtitle, image } = slides[currentIndex];

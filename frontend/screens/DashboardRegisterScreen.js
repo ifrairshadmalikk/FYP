@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TouchableOpacity, Image } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import styles from "../styles/DashboardStyles";
-
+import PassengerLoginScreen from "../Passenger/PassengerLoginScreen";
 export default function DashboardRegisterScreen({ navigation }) {
   const [role, setRole] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -14,7 +14,7 @@ export default function DashboardRegisterScreen({ navigation }) {
     }
     setErrorMsg("");
 
-    if (role === "Passenger") navigation.navigate("PassengerRegister");
+    if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
     if (role === "Driver") navigation.navigate("DriverRegister");
     if (role === "Transporter") navigation.navigate("TransporterRegister");
   };
