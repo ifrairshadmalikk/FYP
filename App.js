@@ -30,6 +30,9 @@ import DriverPerformance from "./frontend/Transporter/DriverPerformance";
 import PassengerPerformance from "./frontend/Transporter/PassengerPerformance";
 import RouteAssignment from "./frontend/Transporter/RouteAssignment";
 import SmartScheduling from "./frontend/Transporter/SmartScheduling";
+//Driver
+import DriverDashboard from "./frontend/Driver/DriverDashboard";
+import DriverTrackingScreen from "./frontend/Driver/DriverTrackingScreen";
 
 const Stack = createStackNavigator();
 
@@ -67,6 +70,9 @@ export default function App() {
         <Stack.Screen name="PassengerPerformance" component={PassengerPerformance} />
         <Stack.Screen name="RouteAssignment" component={RouteAssignment} />
         <Stack.Screen name="SmartScheduling" component={SmartScheduling} />
+{/*Driver*/}
+        <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
+        <Stack.Screen name="VanTrackingdriver" component={DriverTrackingScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

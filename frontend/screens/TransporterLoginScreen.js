@@ -28,7 +28,7 @@ export default function TransporterLoginScreen({ navigation }) {
       return setErrorMsg("Invalid email format. Please enter a valid email address.");
 
     
-    if (email === "transporter@test.com" && password === "Test@1234") {
+    if (email === "d@test.com" && password === "Test@1234") {
       setErrorMsg("");
       alert("Login successful.");
       navigation.navigate("TransporterDashboard");
@@ -96,7 +96,7 @@ export default function TransporterLoginScreen({ navigation }) {
 
       {/* Forgot Password */}
       <TouchableOpacity onPress={handleForgotPassword}>
-        <Text style={{ textAlign: "center", color: "#007bff", marginTop: 15 }}>
+        <Text style={{ textAlign: "center", color: "#", marginTop: 15 }}>
           Forgot Password?
         </Text>
       </TouchableOpacity>
