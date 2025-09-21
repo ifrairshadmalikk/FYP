@@ -17,7 +17,7 @@ export default function DashboardRegisterScreen({ navigation }) {
 
     if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
 
-    if (role === "Passenger") navigation.navigate("PassengerApp");
+    if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
 
     if (role === "Driver") navigation.navigate("DriverRegister");
     if (role === "Transporter") navigation.navigate("TransporterRegister");
