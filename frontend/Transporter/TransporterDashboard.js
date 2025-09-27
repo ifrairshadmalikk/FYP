@@ -7,11 +7,11 @@ import {
   Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native"; // 👈 yeh import zaroori hai
+import { useNavigation } from "@react-navigation/native";
 import styles from "../styles/TransporterStyles";
 
 export default function TransportDashboard() {
-  const navigation = useNavigation(); // 👈 navigation hook use kiya
+  const navigation = useNavigation();
 
   const [stats] = useState({
     revenue: "Rs. 66,750",
@@ -101,13 +101,15 @@ export default function TransportDashboard() {
     },
   ];
 
-  // Animation for utilization bars
-  const animatedWidths = networks.map(() => useRef(new Animated.Value(0)).current);
+  // Animation setup
+  const animatedWidths = networks.map(
+    () => useRef(new Animated.Value(0)).current
+  );
 
   useEffect(() => {
     networks.forEach((net, i) => {
       Animated.timing(animatedWidths[i], {
-        toValue: net.utilization,
+        toValue: net.utilization * 100, // percentage width
         duration: 1000,
         useNativeDriver: false,
       }).start();
@@ -159,9 +161,12 @@ export default function TransportDashboard() {
             activeOpacity={0.7}
             onPress={() => {
               if (action.label === "Send Daily Poll") {
-                navigation.navigate("CreatePoll"); // 👈 next screen pe le jayega
+                navigation.navigate("CreatePoll");
+              } else if (action.label === "Assign Routes") {
+                navigation.navigate("AssignRoute");  // 👈 yeh naya screen hoga
               }
             }}
+
           >
             <Ionicons name={action.icon} size={22} color="#000" />
             <Text style={styles.actionText}>{action.label}</Text>
@@ -197,7 +202,12 @@ export default function TransportDashboard() {
             <Animated.View
               style={[
                 styles.utilizationFill,
-                { flex: animatedWidths[i] },
+                {
+                  width: animatedWidths[i].interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ["0%", "100%"],
+                  })
+                },
               ]}
             />
           </View>
