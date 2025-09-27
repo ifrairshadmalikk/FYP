@@ -30,10 +30,11 @@ import DriverPerformance from "./frontend/Transporter/DriverPerformance";
 import PassengerPerformance from "./frontend/Transporter/PassengerPerformance";
 import RouteAssignment from "./frontend/Transporter/RouteAssignment";
 import SmartScheduling from "./frontend/Transporter/SmartScheduling";
+import CreateDailyPoll from "./frontend/Transporter/CreateDailyPoll"
+
 //Driver
 import DriverDashboard from "./frontend/Driver/DriverDashboard";
 import DriverTrackingScreen from "./frontend/Driver/DriverTrackingScreen";
-
 const Stack = createStackNavigator();
 
 export default function App() {
@@ -75,7 +76,7 @@ export default function App() {
 {/*Driver*/}
         <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
         <Stack.Screen name="VanTrackingdriver" component={DriverTrackingScreen} />
-
+        <Stack.Screen name="CreatePoll" component={CreateDailyPoll} />
       </Stack.Navigator>
     </NavigationContainer>
   );

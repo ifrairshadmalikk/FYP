@@ -7,9 +7,12 @@ import {
   Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native"; // 👈 yeh import zaroori hai
 import styles from "../styles/TransporterStyles";
 
 export default function TransportDashboard() {
+  const navigation = useNavigation(); // 👈 navigation hook use kiya
+
   const [stats] = useState({
     revenue: "Rs. 66,750",
     passengers: 445,
@@ -114,36 +117,33 @@ export default function TransportDashboard() {
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
-  {/* Header */}
-<View style={styles.header}>
-  <Text style={styles.title}>Transport Control Center</Text>
-  <Text style={styles.subtitle}>
-    Manage your entire transportation network
-  </Text>
-  <View style={styles.headerDivider} />
-</View>
-
-
+      <View style={styles.header}>
+        <Text style={styles.title}>Transport Control Center</Text>
+        <Text style={styles.subtitle}>
+          Manage your entire transportation network
+        </Text>
+        <View style={styles.headerDivider} />
+      </View>
 
       {/* Stats Cards */}
       <View style={styles.statsGrid}>
         <View style={styles.card}>
-          <Ionicons name="cash-outline" size={22} color="#0000" />
+          <Ionicons name="cash-outline" size={22} color="#000" />
           <Text style={styles.cardLabel}>Today's Revenue</Text>
           <Text style={styles.cardValue}>{stats.revenue}</Text>
         </View>
         <View style={styles.card}>
-          <Ionicons name="people-outline" size={22} color="#0000" />
+          <Ionicons name="people-outline" size={22} color="#000" />
           <Text style={styles.cardLabel}>Total Passengers</Text>
           <Text style={styles.cardValue}>{stats.passengers}</Text>
         </View>
         <View style={styles.card}>
-          <Ionicons name="person-circle-outline" size={22} color="#0000" />
+          <Ionicons name="person-circle-outline" size={22} color="#000" />
           <Text style={styles.cardLabel}>Active Drivers</Text>
           <Text style={styles.cardValue}>{stats.drivers}</Text>
         </View>
         <View style={styles.card}>
-          <Ionicons name="stats-chart-outline" size={22} color="#0000" />
+          <Ionicons name="stats-chart-outline" size={22} color="#000" />
           <Text style={styles.cardLabel}>Response Rate</Text>
           <Text style={styles.cardValue}>{stats.responseRate}</Text>
         </View>
@@ -157,8 +157,13 @@ export default function TransportDashboard() {
             key={action.id}
             style={styles.actionBtn}
             activeOpacity={0.7}
+            onPress={() => {
+              if (action.label === "Send Daily Poll") {
+                navigation.navigate("CreatePoll"); // 👈 next screen pe le jayega
+              }
+            }}
           >
-            <Ionicons name={action.icon} size={22} color="#0000" />
+            <Ionicons name={action.icon} size={22} color="#000" />
             <Text style={styles.actionText}>{action.label}</Text>
           </TouchableOpacity>
         ))}
@@ -204,7 +209,7 @@ export default function TransportDashboard() {
       {activities.map((act) => (
         <View key={act.id} style={styles.activityCard}>
           <View style={styles.rowBetween}>
-            <Ionicons name={act.icon} size={20} color="#0000" />
+            <Ionicons name={act.icon} size={20} color="#000" />
             <Text style={styles.activityTime}>{act.time}</Text>
           </View>
           <Text style={styles.activityText}>{act.text}</Text>
