@@ -2,7 +2,7 @@ import "react-native-gesture-handler";
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
-
+import { createDrawerNavigator } from "@react-navigation/drawer";
 // Screens
 import Onboarding from "./frontend/screens/Onboarding";
 import WelcomeScreen from "./frontend/screens/WelcomeScreen";
@@ -40,6 +40,28 @@ import DriverDashboard from "./frontend/Driver/DriverDashboard";
 import DriverTrackingScreen from "./frontend/Driver/DriverTrackingScreen";
 
 const Stack = createStackNavigator();
+const Drawer = createDrawerNavigator();
+
+function TransporterDrawer() {
+  return (
+    <Drawer.Navigator
+      screenOptions={{
+        headerShown: false,  // ہم custom header dashboard میں بنائیں گے
+        drawerType: "slide",
+        drawerStyle: {
+          backgroundColor: "#fff",
+          width: 240,
+        },
+      }}
+    >
+      <Drawer.Screen name="Dashboard" component={TransporterDashboard} />
+      <Drawer.Screen name="Passenger List" component={PassengerList} />
+      <Drawer.Screen name="Driver List" component={DriverList} />
+      <Drawer.Screen name="Payments" component={PaymentsScreen} />
+      <Drawer.Screen name="Alerts" component={AlertsScreen} />
+    </Drawer.Navigator>
+  );
+}
 
 export default function App() {
   return (
@@ -63,6 +85,7 @@ export default function App() {
         <Stack.Screen name="PassengerLoginScreen" component={PassengerLoginScreen} />
 
         {/* Transporter Flow */}
+        <Stack.Screen name="Transporter" component={TransporterDrawer} />
         <Stack.Screen name="TransporterDashboard" component={TransporterDashboardScreen} />
         <Stack.Screen name="PassengerList" component={PassengerList} />
         <Stack.Screen name="DriverList" component={DriverList} />

@@ -18,10 +18,12 @@ export default function ManageRecordsScreen({ navigation }) {
   const [records, setRecords] = useState([
     { id: 1, type: "Driver", name: "Ali Khan", mobile: "03001234567", cnic: "1234512345671", email: "ali@example.com", password: "Ali@1234" },
     { id: 2, type: "Passenger", name: "Sara Ahmed", mobile: "03111234567", cnic: "3214512345672", email: "sara@example.com", password: "Sara@1234" },
+    { id: 3, type: "Driver", name: "Ahmed Raza", mobile: "03007654321", cnic: "1234512345673", email: "ahmed@example.com", password: "Ahmed@1234" },
   ]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [activeTab, setActiveTab] = useState("Driver"); // Default tab
 
   const handleDelete = (id) => {
     Alert.alert(
@@ -43,7 +45,6 @@ export default function ManageRecordsScreen({ navigation }) {
   };
 
   const handleSave = () => {
-    // Validation
     const nameRegex = /^[A-Za-z\s]{1,50}$/;
     const mobileRegex = /^\d{11}$/;
     const cnicRegex = /^\d{13}$/;
@@ -62,11 +63,39 @@ export default function ManageRecordsScreen({ navigation }) {
     setModalVisible(false);
   };
 
+  const filteredRecords = records.filter((r) => r.type === activeTab);
+
+  const renderRecordCard = (item) => (
+    <View key={item.id} style={styles.card}>
+      <Text style={styles.recordTitle}>{item.type}: {item.name}</Text>
+      <View style={styles.infoRow}>
+        <Ionicons name="call-outline" size={18} color="#555" style={{ marginRight: 6 }} />
+        <Text style={styles.recordSub}>{item.mobile}</Text>
+      </View>
+      <View style={styles.infoRow}>
+        <Ionicons name="id-card-outline" size={18} color="#555" style={{ marginRight: 6 }} />
+        <Text style={styles.recordSub}>{item.cnic}</Text>
+      </View>
+      <View style={styles.infoRow}>
+        <Ionicons name="mail-outline" size={18} color="#555" style={{ marginRight: 6 }} />
+        <Text style={styles.recordSub}>{item.email}</Text>
+      </View>
+
+      <View style={styles.actionRow}>
+        <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(item)}>
+          <Text style={styles.editText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.iconBtn}>
+          <Ionicons name="trash" size={20} color="#000" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor="#afd826" barStyle="light-content" />
 
-      {/* Header */}
       <View style={styles.headerBar}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -75,81 +104,33 @@ export default function ManageRecordsScreen({ navigation }) {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Records List */}
-      <ScrollView style={styles.container}>
-        {records.map((item) => (
-          <View key={item.id} style={styles.card}>
-            <Text style={styles.recordTitle}>{item.type}: {item.name}</Text>
-
-            <View style={styles.infoRow}>
-              <Ionicons name="call-outline" size={18} color="#555" style={{ marginRight: 6 }} />
-              <Text style={styles.recordSub}>{item.mobile}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Ionicons name="id-card-outline" size={18} color="#555" style={{ marginRight: 6 }} />
-              <Text style={styles.recordSub}>{item.cnic}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Ionicons name="mail-outline" size={18} color="#555" style={{ marginRight: 6 }} />
-              <Text style={styles.recordSub}>{item.email}</Text>
-            </View>
-
-            {/* Action Row */}
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(item)}>
-                <Text style={styles.editText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.iconBtn}>
-                <Ionicons name="trash" size={20} color="#000" />
-              </TouchableOpacity>
-            </View>
-          </View>
+      {/* Tabs */}
+      <View style={styles.tabRow}>
+        {["Driver", "Passenger"].map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tabBtn, activeTab === tab && styles.activeTabBtn]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}s</Text>
+          </TouchableOpacity>
         ))}
+      </View>
+
+      <ScrollView style={styles.container}>
+        {filteredRecords.length > 0 ? filteredRecords.map(renderRecordCard) : <Text style={styles.emptyText}>No {activeTab.toLowerCase()}s found.</Text>}
       </ScrollView>
 
-      {/* Edit Modal */}
       {selectedRecord && (
         <Modal transparent visible={modalVisible} animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
               <Text style={styles.modalTitle}>Edit {selectedRecord.type}</Text>
-
-              <TextInput
-                style={styles.input}
-                placeholder="Full Name"
-                value={selectedRecord.name}
-                onChangeText={(text) => setSelectedRecord({ ...selectedRecord, name: text })}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Mobile"
-                keyboardType="numeric"
-                value={selectedRecord.mobile}
-                onChangeText={(text) => setSelectedRecord({ ...selectedRecord, mobile: text })}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="CNIC"
-                keyboardType="numeric"
-                value={selectedRecord.cnic}
-                onChangeText={(text) => setSelectedRecord({ ...selectedRecord, cnic: text })}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                value={selectedRecord.email}
-                onChangeText={(text) => setSelectedRecord({ ...selectedRecord, email: text })}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                secureTextEntry
-                value={selectedRecord.password}
-                onChangeText={(text) => setSelectedRecord({ ...selectedRecord, password: text })}
-              />
-
+              <TextInput style={styles.input} placeholder="Full Name" value={selectedRecord.name} onChangeText={(text) => setSelectedRecord({ ...selectedRecord, name: text })} />
+              <TextInput style={styles.input} placeholder="Mobile" keyboardType="numeric" value={selectedRecord.mobile} onChangeText={(text) => setSelectedRecord({ ...selectedRecord, mobile: text })} />
+              <TextInput style={styles.input} placeholder="CNIC" keyboardType="numeric" value={selectedRecord.cnic} onChangeText={(text) => setSelectedRecord({ ...selectedRecord, cnic: text })} />
+              <TextInput style={styles.input} placeholder="Email" value={selectedRecord.email} onChangeText={(text) => setSelectedRecord({ ...selectedRecord, email: text })} />
+              <TextInput style={styles.input} placeholder="Password" secureTextEntry value={selectedRecord.password} onChangeText={(text) => setSelectedRecord({ ...selectedRecord, password: text })} />
               <View style={styles.modalBtnRow}>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
                   <Text style={styles.saveText}>Save</Text>
@@ -170,8 +151,17 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#afd826", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
   headerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#afd826", paddingHorizontal: 15, paddingVertical: 12, elevation: 4 },
   headerTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
+
+  tabRow: { flexDirection: "row", backgroundColor: "#f0f0f0", marginHorizontal: 20, borderRadius: 10, marginTop: 15 },
+  tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center" },
+  activeTabBtn: { backgroundColor: "#afd826" },
+  tabText: { color: "#333", fontWeight: "bold" },
+  activeTabText: { color: "#fff" },
+
   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  card: { backgroundColor: "#f9f9f9", padding: 15, borderRadius: 10, marginBottom: 15, borderWidth: 1, borderColor: "#eee", shadowColor: "#000", shadowOpacity: 0.1, shadowOffset: { width: 0, height: 2 }, shadowRadius: 3 },
+  emptyText: { fontSize: 14, color: "#777", marginBottom: 10 },
+
+  card: { backgroundColor: "#f9f9f9", padding: 15, borderRadius: 10, marginBottom: 15, borderWidth: 1, borderColor: "#eee" },
   recordTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 8 },
   recordSub: { fontSize: 14, color: "#555" },
   infoRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
