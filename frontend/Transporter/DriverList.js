@@ -7,14 +7,13 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function DriverList({ navigation }) {
   const [expandedDriver, setExpandedDriver] = useState(null);
 
-  const [drivers, setDrivers] = useState([
+  const [drivers] = useState([
     { id: 1, name: "Ali Khan", availability: "09:00 - 17:00", isAvailableToday: true },
     { id: 2, name: "Zara Iqbal", availability: "10:00 - 18:00", isAvailableToday: false },
     { id: 3, name: "Ahmed Raza", availability: "08:00 - 16:00", isAvailableToday: true },
@@ -33,32 +32,50 @@ export default function DriverList({ navigation }) {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
         {drivers.map((driver) => (
           <View key={driver.id} style={styles.card}>
             <TouchableOpacity
-              style={styles.driverHeader}
+              activeOpacity={0.8}
               onPress={() =>
                 setExpandedDriver(expandedDriver === driver.id ? null : driver.id)
               }
             >
-              <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+              {/* Top Row */}
+              <View style={styles.row}>
                 <Text style={styles.driverName}>{driver.name}</Text>
-                {!driver.isAvailableToday && (
-                  <View style={styles.unavailableContainer}>
-                    <Ionicons
-                      name="alert-circle"
-                      size={16}
-                      color="#dc3545"
-                      style={{ marginLeft: 6 }}
-                    />
-                    <Text style={styles.unavailableText}>Not Available Today</Text>
-                  </View>
-                )}
+                <View
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: driver.isAvailableToday ? "#eaf8ee" : "#fdeaea",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      { color: driver.isAvailableToday ? "#28a745" : "#dc3545" },
+                    ]}
+                  >
+                    {driver.isAvailableToday ? "Available Today" : "Not Available"}
+                  </Text>
+                </View>
               </View>
+
+              {/* Availability */}
               <Text style={styles.driverAvailability}>
-                Availability: {driver.availability}
+                Working Hours: {driver.availability}
               </Text>
+
+              {/* Expanded Section */}
+              {expandedDriver === driver.id && (
+                <View style={styles.expandedSection}>
+                  <Text style={styles.expandedText}>
+                    More details about {driver.name} can be shown here.
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         ))}
@@ -68,11 +85,7 @@ export default function DriverList({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
-  },
+  safeArea: { flex: 1, backgroundColor: "#F9FAFB" },
   headerContainer: {
     height: 60,
     backgroundColor: "#afd826",
@@ -80,31 +93,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 15,
+    elevation: 3,
   },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
+
   container: { padding: 15 },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    marginBottom: 12,
-    padding: 15,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
     elevation: 3,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    shadowRadius: 6,
   },
-  driverHeader: {
-    flexDirection: "column",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  driverName: { fontSize: 17, fontWeight: "700", color: "#111" },
+  driverAvailability: { fontSize: 14, color: "#555", marginTop: 6 },
+
+  badge: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 20,
   },
-  driverName: { fontSize: 16, fontWeight: "600", color: "#000" },
-  driverAvailability: { fontSize: 14, color: "#555", marginTop: 4 },
-  unavailableContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 8,
+  badgeText: { fontSize: 12, fontWeight: "600" },
+
+  expandedSection: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "#f5f5f5",
   },
-  unavailableText: { color: "#dc3545", fontSize: 12, marginLeft: 2 },
+  expandedText: { fontSize: 13, color: "#444" },
 });

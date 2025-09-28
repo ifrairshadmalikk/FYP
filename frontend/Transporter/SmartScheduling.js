@@ -5,40 +5,31 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  Platform,
   ScrollView,
   TouchableOpacity,
   TextInput,
-  FlatList,
-  Alert
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function SmartScheduling({ navigation }) {
-  // Example passenger bookings
-  const [bookings, setBookings] = useState([
+  const [bookings] = useState([
     { id: 1, name: "Sara", pickup: "Gulberg", drop: "Model Town", preferredTime: "08:00" },
     { id: 2, name: "Ahmed", pickup: "DHA", drop: "Gulberg", preferredTime: "08:15" },
     { id: 3, name: "Ali", pickup: "Johar Town", drop: "DHA", preferredTime: "08:30" },
-    { id: 4, name: "Zara", pickup: "Wapda Town", drop: "Gulberg", preferredTime: "08:45" }
+    { id: 4, name: "Zara", pickup: "Wapda Town", drop: "Gulberg", preferredTime: "08:45" },
   ]);
 
-  // Available drivers
-  const [drivers, setDrivers] = useState(["Ali Khan", "Ahmed Raza", "Zara Iqbal"]);
+  const [drivers] = useState(["Ali Khan", "Ahmed Raza", "Zara Iqbal"]);
 
-  // Auto-suggested routes
   const [suggestedRoutes, setSuggestedRoutes] = useState([]);
-
-  // Confirmed schedule
   const [confirmedRoutes, setConfirmedRoutes] = useState([]);
 
   useEffect(() => {
     generateSuggestedRoutes();
   }, []);
 
-  // Generate routes based on passenger locations (simple mock logic)
   const generateSuggestedRoutes = () => {
-    // For simplicity, just split into 2 routes
     const route1 = { id: Date.now() + 1, name: "Route 1", passengers: bookings.slice(0, 2), driver: "" };
     const route2 = { id: Date.now() + 2, name: "Route 2", passengers: bookings.slice(2), driver: "" };
     setSuggestedRoutes([route1, route2]);
@@ -71,7 +62,7 @@ export default function SmartScheduling({ navigation }) {
     }
     setConfirmedRoutes([...confirmedRoutes, route]);
     setSuggestedRoutes(suggestedRoutes.filter((r) => r.id !== route.id));
-    Alert.alert("Schedule Confirmed", `${route.name} has been confirmed with driver ${route.driver}`);
+    Alert.alert("✅ Schedule Confirmed", `${route.name} confirmed with driver ${route.driver}`);
   };
 
   return (
@@ -84,18 +75,21 @@ export default function SmartScheduling({ navigation }) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Smart Scheduling</Text>
-        <View style={{ width: 24 }} />
+        <Ionicons name="" size={22} color="#fff" />
       </View>
 
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.sectionTitle}>Suggested Routes</Text>
-        {suggestedRoutes.map((route) => (
-          <View key={route.id} style={styles.card}>
+        {/* Suggested */}
+        <Text style={styles.sectionTitle}>🚐 Suggested Routes</Text>
+        {suggestedRoutes.map((route, idx) => (
+          <View key={route.id} style={[styles.card, { borderLeftColor: idx % 2 === 0 ? "#3498db" : "#9b59b6" }]}>
             <Text style={styles.routeName}>{route.name}</Text>
 
-            <Text style={styles.subTitle}>Passengers:</Text>
+            {/* Passengers */}
+            <Text style={styles.subTitle}>👥 Passengers</Text>
             {route.passengers.map((p) => (
               <View key={p.id} style={styles.passengerRow}>
+                <Ionicons name="person-circle-outline" size={18} color="#555" />
                 <Text style={styles.passengerName}>{p.name}</Text>
                 <TextInput
                   style={styles.timeInput}
@@ -106,36 +100,48 @@ export default function SmartScheduling({ navigation }) {
               </View>
             ))}
 
-            <Text style={styles.subTitle}>Assign Driver:</Text>
-            <ScrollView horizontal>
+            {/* Drivers */}
+            <Text style={styles.subTitle}>🧑‍✈️ Assign Driver</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 5 }}>
               {drivers.map((driver, index) => (
                 <TouchableOpacity
                   key={index}
                   style={[
-                    styles.driverButton,
-                    route.driver === driver && { backgroundColor: "#afd826" }
+                    styles.driverChip,
+                    route.driver === driver && { backgroundColor: "#afd826" },
                   ]}
                   onPress={() => assignDriver(route.id, driver)}
                 >
-                  <Text style={styles.driverButtonText}>{driver}</Text>
+                  <Ionicons name="person-outline" size={16} color={route.driver === driver ? "#fff" : "#333"} />
+                  <Text
+                    style={[
+                      styles.driverChipText,
+                      route.driver === driver && { color: "#fff" },
+                    ]}
+                  >
+                    {driver}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
+            {/* Confirm */}
             <TouchableOpacity style={styles.confirmButton} onPress={() => confirmSchedule(route)}>
+              <Ionicons name="checkmark-circle" size={18} color="#fff" style={{ marginRight: 6 }} />
               <Text style={styles.confirmButtonText}>Confirm Schedule</Text>
             </TouchableOpacity>
           </View>
         ))}
 
-        <Text style={styles.sectionTitle}>Confirmed Routes</Text>
+        {/* Confirmed */}
+        <Text style={styles.sectionTitle}>✅ Confirmed Routes</Text>
         {confirmedRoutes.map((route) => (
-          <View key={route.id} style={styles.card}>
+          <View key={route.id} style={[styles.card, { borderLeftColor: "#2ecc71" }]}>
             <Text style={styles.routeName}>{route.name}</Text>
             <Text style={styles.subTitle}>Driver: {route.driver}</Text>
             {route.passengers.map((p) => (
-              <Text key={p.id} style={styles.locationText}>
-                {p.name}: {p.pickup} → {p.drop} at {p.preferredTime}
+              <Text key={p.id} style={styles.confirmedPassenger}>
+                {p.name} → {p.drop} at {p.preferredTime}
               </Text>
             ))}
           </View>
@@ -146,20 +152,76 @@ export default function SmartScheduling({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F9FAFB", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
-  headerContainer: { height: 60, backgroundColor: "#afd826", flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 15 },
+  safeArea: { flex: 1, backgroundColor: "#F9FAFB" },
+  headerContainer: {
+    height: 60,
+    backgroundColor: "#afd826",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 15,
+    elevation: 4,
+  },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
   container: { padding: 15 },
   sectionTitle: { fontSize: 16, fontWeight: "700", marginVertical: 10 },
-  card: { backgroundColor: "#fff", borderRadius: 12, padding: 15, marginBottom: 12, elevation: 3, shadowColor: "#000", shadowOpacity: 0.1, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    borderLeftWidth: 5,
+  },
   routeName: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-  subTitle: { fontSize: 14, fontWeight: "600", marginBottom: 4 },
-  passengerRow: { marginBottom: 6 },
-  passengerName: { fontSize: 14, fontWeight: "600" },
+  subTitle: { fontSize: 14, fontWeight: "600", marginBottom: 4, color: "#444" },
+  passengerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+    backgroundColor: "#f8f9fa",
+    padding: 6,
+    borderRadius: 8,
+  },
+  passengerName: { fontSize: 14, fontWeight: "600", marginLeft: 4, marginRight: 8 },
   locationText: { fontSize: 13, color: "#555" },
-  timeInput: { borderWidth: 1, borderColor: "#ccc", borderRadius: 6, padding: 4, width: 70, marginVertical: 2 },
-  driverButton: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: "#eee", marginRight: 8 },
-  driverButtonText: { fontSize: 14, fontWeight: "600", color: "#333" },
-  confirmButton: { marginTop: 10, backgroundColor: "#afd826", paddingVertical: 10, borderRadius: 8, alignItems: "center" },
-  confirmButtonText: { color: "#fff", fontWeight: "700", fontSize: 14 }
+  timeInput: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    padding: 4,
+    width: 70,
+    marginRight: 8,
+    textAlign: "center",
+    fontSize: 13,
+  },
+  driverChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#eee",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  driverChipText: { fontSize: 13, fontWeight: "600", marginLeft: 4, color: "#333" },
+  confirmButton: {
+    marginTop: 10,
+    backgroundColor: "#afd826",
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  confirmButtonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  confirmedPassenger: {
+    fontSize: 13,
+    marginVertical: 2,
+    color: "#2d3436",
+  },
 });

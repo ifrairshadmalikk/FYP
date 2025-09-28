@@ -5,7 +5,6 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  Platform,
   TouchableOpacity,
   FlatList,
 } from "react-native";
@@ -15,13 +14,13 @@ import MapView, { Marker } from "react-native-maps";
 export default function VanTrackingScreen({ navigation }) {
   const [vanLocations, setVanLocations] = useState([
     { id: 1, name: "V1", latitude: 24.8607, longitude: 67.0011 },
-    { id: 2, name: "V2", latitude: 24.8610, longitude: 67.0025 },
-    { id: 3, name: "V3", latitude: 24.8620, longitude: 67.0030 },
+    { id: 2, name: "V2", latitude: 24.861, longitude: 67.0025 },
+    { id: 3, name: "V3", latitude: 24.862, longitude: 67.003 },
   ]);
   const [selectedVan, setSelectedVan] = useState(null);
   const mapRef = useRef();
 
-  // Simulate real-time location updates
+  // Fake real-time update
   useEffect(() => {
     const interval = setInterval(() => {
       setVanLocations((prev) =>
@@ -63,9 +62,9 @@ export default function VanTrackingScreen({ navigation }) {
 
       {/* Info Panel */}
       <View style={styles.infoPanel}>
-        <Text style={styles.infoTitle}>Track Your Vans in Real-Time</Text>
+        <Text style={styles.infoTitle}>Track Vans in Real-Time</Text>
         <Text style={styles.infoSubtitle}>
-          Tap on a van below to center its location on the map.
+          Select a van below to focus on its live location on the map.
         </Text>
 
         {/* Van Selector */}
@@ -74,7 +73,7 @@ export default function VanTrackingScreen({ navigation }) {
           horizontal
           keyExtractor={(item) => item.id.toString()}
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 10 }}
+          contentContainerStyle={{ marginTop: 14 }}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[
@@ -86,7 +85,7 @@ export default function VanTrackingScreen({ navigation }) {
               <Text
                 style={[
                   styles.vanBtnText,
-                  selectedVan?.id === item.id && { color: "#fff" },
+                  selectedVan?.id === item.id && styles.vanBtnTextSelected,
                 ]}
               >
                 {item.name}
@@ -113,7 +112,7 @@ export default function VanTrackingScreen({ navigation }) {
               key={van.id}
               coordinate={{ latitude: van.latitude, longitude: van.longitude }}
               title={van.name}
-              pinColor={selectedVan?.id === van.id ? "#28a745" : "orange"}
+              pinColor={selectedVan?.id === van.id ? "#28a745" : "#f39c12"}
             />
           ))}
         </MapView>
@@ -123,49 +122,68 @@ export default function VanTrackingScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#afd826",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
-  },
+  safeArea: { flex: 1, backgroundColor: "#f8f9fa" },
+
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#afd826",
     paddingHorizontal: 15,
-    paddingVertical: 12,
-    elevation: 4,
+    height: 60,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
   },
-  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
 
   infoPanel: {
-    backgroundColor: "#f5f5f5",
-    padding: 15,
-    marginHorizontal: 15,
-    marginTop: 15,
-    borderRadius: 12,
-    elevation: 3,
+    backgroundColor: "#fff",
+    padding: 18,
+    margin: 15,
+    borderRadius: 14,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
   },
-  infoTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 5 },
-  infoSubtitle: { fontSize: 14, color: "#555" },
+  infoTitle: { fontSize: 16, fontWeight: "700", color: "#111" },
+  infoSubtitle: { fontSize: 14, color: "#666", marginTop: 6, lineHeight: 20 },
 
   vanBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: "#ddd",
-    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 20,
+    backgroundColor: "#f1f3f5",
+    borderRadius: 22,
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
   },
-  vanBtnSelected: { backgroundColor: "#afd826" },
-  vanBtnText: { fontWeight: "bold", color: "#000" },
+  vanBtnSelected: {
+    backgroundColor: "#28a745",
+    borderColor: "#28a745",
+    shadowColor: "#28a745",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+  },
+  vanBtnText: { fontSize: 14, fontWeight: "600", color: "#333" },
+  vanBtnTextSelected: { color: "#fff" },
 
   mapContainer: {
     flex: 1,
     marginHorizontal: 15,
-    marginTop: 15,
-    borderRadius: 12,
+    marginBottom: 15,
+    borderRadius: 14,
     overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 5,
   },
   map: { flex: 1 },
 });

@@ -218,7 +218,9 @@ export default function DriverDashboard({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#afd826", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
+  safeArea: {
+    flex: 1, backgroundColor: "#afd826",
+  },
   container: { flex: 1, backgroundColor: "#F9FAFB" },
 
   header: { padding: 16, backgroundColor: "#afd826", justifyContent: "center", alignItems: "center", elevation: 4 },

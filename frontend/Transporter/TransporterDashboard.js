@@ -195,8 +195,8 @@ export default function TransporterDashboard() {
               <Text style={styles.sidebarTitle}>Menu</Text>
               {[
                 { icon: "location-outline", label: "Van Tracking", nav: "VanTracking" },
-                { icon: "person-add-outline", label: "Add Driver", nav: "AddDriver" },
-                { icon: "person-circle-outline", label: "Add Passenger", nav: "AddPassenger" },
+                { icon: "person-add-outline", label: "Add Driver", nav: "AddingDriver" },
+                { icon: "person-circle-outline", label: "Add Passenger", nav: "AddingPassenger" },
                 { icon: "people-outline", label: "Drivers List", nav: "DriverList" },
                 { icon: "person-outline", label: "Passengers List", nav: "PassengerList" },
                 { icon: "bar-chart-outline", label: "Driver Performance", nav: "DriverPerformance" },
@@ -230,20 +230,21 @@ export default function TransporterDashboard() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#afd826",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
-  },
+    backgroundColor: "#afd826",  },
   container: { flex: 1, backgroundColor: "#F9FAFB" },
 
+  
   headerBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     backgroundColor: "#afd826",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    justifyContent: "space-between",
+    flexDirection: "row",
+    alignItems: "center",
     elevation: 4,
   },
+  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
+
   headerTitle: { fontSize: width * 0.05, fontWeight: "700", color: "#fff" },
 
   scrollContent: { padding: 15 },

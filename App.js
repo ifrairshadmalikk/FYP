@@ -34,7 +34,8 @@ import RouteAssignment from "./frontend/Transporter/RouteAssignment";
 import SmartScheduling from "./frontend/Transporter/SmartScheduling";
 import CreateDailyPoll from "./frontend/Transporter/CreateDailyPoll";
 import AssignRoutesScreen from "./frontend/Transporter/AssignRoutesScreen";
-
+import AddDriverSearch from "./frontend/Transporter/AddDriverSearch"
+import AddPassengerSearch from "./frontend/Transporter/AddPassengerSearch"
 // Driver
 import DriverDashboard from "./frontend/Driver/DriverDashboard";
 import DriverTrackingScreen from "./frontend/Driver/DriverTrackingScreen";
@@ -100,6 +101,8 @@ export default function App() {
         <Stack.Screen name="RouteAssignment" component={RouteAssignment} />
         <Stack.Screen name="SmartScheduling" component={SmartScheduling} />
         <Stack.Screen name="AssignRoute" component={AssignRoutesScreen} />
+        <Stack.Screen name="AddingDriver" component={AddDriverSearch} />
+        <Stack.Screen name="AddingPassenger" component={AddPassengerSearch} />
 
         {/* Driver */}
         <Stack.Screen name="DriverDashboard" component={DriverDashboard} />

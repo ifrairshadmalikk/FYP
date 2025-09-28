@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   FlatList,
   SafeAreaView,
   StatusBar,
-  Platform,
   TouchableOpacity,
   Animated,
 } from "react-native";
@@ -24,17 +23,17 @@ export default function PassengerList({ navigation }) {
     { id: 4, name: "Zara", van: "Van 4", pickup: "Location 4", status: "not_studied", timing: "11:00 - 12:00" },
   ];
 
-  const getStatusText = (status) => {
+  const getStatus = (status) => {
     switch (status) {
       case "going":
-        return { text: "Going Tomorrow", color: "#28a745" };
+        return { text: "Going Tomorrow", color: "#28a745", bg: "#eaf8ee" };
       case "not_going":
-        return { text: "Not Going Tomorrow", color: "#dc3545" };
+        return { text: "Not Going Tomorrow", color: "#dc3545", bg: "#fdeaea" };
       case "not_confirmed":
       case "not_studied":
-        return { text: "Not Confirmed Yet", color: "#fd7e14" };
+        return { text: "Not Confirmed Yet", color: "#fd7e14", bg: "#fff4e6" };
       default:
-        return { text: "Unknown", color: "#555" };
+        return { text: "Unknown", color: "#555", bg: "#eee" };
     }
   };
 
@@ -43,27 +42,48 @@ export default function PassengerList({ navigation }) {
     setModalVisible(true);
     fadeAnim.setValue(0);
 
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-
-    // Auto hide after 2.5 sec
+    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     setTimeout(() => hideModal(), 2500);
   };
 
   const hideModal = () => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => setModalVisible(false));
+    Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() =>
+      setModalVisible(false)
+    );
   };
 
-  const sendStudyReminder = (passenger) => {
+  const sendReminder = (passenger) => {
     showModal(`Reminder sent to ${passenger.name}.`);
-    // Backend API call can be placed here
+  };
+
+  const renderItem = ({ item }) => {
+    const statusInfo = getStatus(item.status);
+
+    return (
+      <View style={styles.card}>
+        <Text style={styles.name}>{item.name}</Text>
+        <Text style={styles.infoText}>Van: {item.van}</Text>
+        <Text style={styles.infoText}>Pickup: {item.pickup}</Text>
+        <Text style={styles.infoText}>Timing: {item.timing}</Text>
+
+        {/* Status Badge */}
+        <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
+          <Text style={[styles.statusText, { color: statusInfo.color }]}>
+            {statusInfo.text}
+          </Text>
+        </View>
+
+        {(item.status === "not_studied" || item.status === "not_confirmed") && (
+          <TouchableOpacity
+            style={styles.reminderButton}
+            activeOpacity={0.8}
+            onPress={() => sendReminder(item)}
+          >
+            <Text style={styles.reminderButtonText}>Send Confirmation</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -83,27 +103,8 @@ export default function PassengerList({ navigation }) {
         data={passengers}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.container}
-        renderItem={({ item }) => {
-          const statusInfo = getStatusText(item.status);
-          return (
-            <View style={styles.card}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.infoText}>Van: {item.van}</Text>
-              <Text style={styles.infoText}>Pickup: {item.pickup}</Text>
-              <Text style={styles.infoText}>Timing: {item.timing}</Text>
-              <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusInfo.text}</Text>
-
-              {(item.status === "not_studied" || item.status === "not_confirmed") && (
-                <TouchableOpacity
-                  style={styles.reminderButton}
-                  onPress={() => sendStudyReminder(item)}
-                >
-                  <Text style={styles.reminderButtonText}>Send Confirmation</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        }}
+        renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
       />
 
       {/* Custom Animated Modal */}
@@ -122,7 +123,7 @@ export default function PassengerList({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F9FAFB", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
+  safeArea: { flex: 1, backgroundColor: "#F9FAFB" },
   headerContainer: {
     height: 60,
     backgroundColor: "#afd826",
@@ -130,32 +131,44 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 15,
+    elevation: 3,
   },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
+
   container: { padding: 15 },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 12,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
     elevation: 3,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    shadowRadius: 6,
   },
-  name: { fontSize: 16, fontWeight: "600", color: "#000", marginBottom: 4 },
-  infoText: { fontSize: 14, color: "#555", marginBottom: 2 },
-  statusText: { fontSize: 14, fontWeight: "600", marginTop: 4 },
-  reminderButton: {
-    marginTop: 8,
-    backgroundColor: "#afd826",
-    paddingVertical: 6,
+  name: { fontSize: 17, fontWeight: "700", color: "#111", marginBottom: 6 },
+  infoText: { fontSize: 14, color: "#555", marginBottom: 3 },
+
+  statusBadge: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    paddingVertical: 4,
     paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  statusText: { fontSize: 13, fontWeight: "600" },
+
+  reminderButton: {
+    marginTop: 12,
+    backgroundColor: "#afd826",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignSelf: "flex-start",
   },
-  reminderButtonText: { color: "#fff", fontWeight: "600", fontSize: 14 },
+  reminderButtonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
   modalContainer: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
@@ -165,12 +178,18 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 12,
+    padding: 22,
+    borderRadius: 14,
     width: "80%",
     alignItems: "center",
+    elevation: 6,
   },
-  modalText: { fontSize: 16, color: "#333", textAlign: "center", marginBottom: 12 },
-  modalButton: { backgroundColor: "#afd826", paddingVertical: 8, paddingHorizontal: 20, borderRadius: 8 },
-  modalButtonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  modalText: { fontSize: 16, color: "#333", textAlign: "center", marginBottom: 16 },
+  modalButton: {
+    backgroundColor: "#afd826",
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  modalButtonText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });

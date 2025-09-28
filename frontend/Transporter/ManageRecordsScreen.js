@@ -148,7 +148,9 @@ export default function ManageRecordsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#afd826", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
+  safeArea: {
+    flex: 1, backgroundColor: "#afd826",
+  },
   headerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#afd826", paddingHorizontal: 15, paddingVertical: 12, elevation: 4 },
   headerTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
 

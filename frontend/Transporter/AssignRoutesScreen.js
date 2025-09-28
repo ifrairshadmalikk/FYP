@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function AssignRoutesScreen() {
+export default function AssignRoutesScreen({ navigation }) {
     const [selectedTab, setSelectedTab] = useState("routes");
     const [selectedShift, setSelectedShift] = useState("8:00 - 10:00 AM");
     const [shiftOpen, setShiftOpen] = useState(false);
@@ -38,9 +38,13 @@ export default function AssignRoutesScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: "#f9f9f9" }}>
             <StatusBar backgroundColor="#afd826" barStyle="light-content" />
 
-            {/* Header */}
+            {/* Header with Back Button */}
             <View style={styles.headerBar}>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                </TouchableOpacity>
                 <Text style={styles.headerTitle}>Route Assignment</Text>
+                <View style={{ width: 24 }} /> {/* spacing */}
             </View>
 
             <ScrollView contentContainerStyle={styles.container}>
@@ -54,7 +58,7 @@ export default function AssignRoutesScreen() {
                         alert("✅ All assignments saved successfully!");
                     }}
                 >
-                    <Text style={styles.saveBtnText}>💾 Save All Assignments</Text>
+                    <Text style={styles.saveBtnText}>Save All Assignments</Text>
                 </TouchableOpacity>
 
                 {/* Shift Dropdown */}
@@ -63,8 +67,7 @@ export default function AssignRoutesScreen() {
                         style={styles.dropdownHeader}
                         onPress={() => setShiftOpen(!shiftOpen)}
                     >
-                        <Ionicons name="time-outline" size={18} color="#333" />
-                        <Text style={{ marginLeft: 6 }}>{selectedShift}</Text>
+                        <Text style={{ fontWeight: "600" }}>{selectedShift}</Text>
                         <Ionicons
                             name={shiftOpen ? "chevron-up" : "chevron-down"}
                             size={18}
@@ -144,9 +147,8 @@ export default function AssignRoutesScreen() {
 
                             {/* Map Placeholder */}
                             <View style={styles.mapBox}>
-                                <Ionicons name="map-outline" size={24} color="#555" />
-                                <Text style={{ color: "#555", marginLeft: 6 }}>
-                                    Route map preview
+                                <Text style={{ color: "#555" }}>
+                                    🗺 Route map preview
                                 </Text>
                             </View>
                         </View>
@@ -157,7 +159,7 @@ export default function AssignRoutesScreen() {
                             <Text style={styles.smallText}>{p.area}</Text>
                             <Text style={styles.smallText}>{p.university}</Text>
 
-                            {/* Dropdown simulation */}
+                            {/* Assign dropdown */}
                             <TouchableOpacity
                                 style={styles.assignBtn}
                                 onPress={() =>
@@ -165,11 +167,10 @@ export default function AssignRoutesScreen() {
                                 }
                             >
                                 <Text style={styles.assignText}>
-                                    {"Assign to driver ▼"}
+                                    Assign to driver ▼
                                 </Text>
                             </TouchableOpacity>
 
-                            {/* Dropdown list */}
                             {openPassenger === p.id && (
                                 <View style={styles.dropdownList}>
                                     {drivers.map((d) => (
@@ -182,8 +183,8 @@ export default function AssignRoutesScreen() {
                                             }}
                                         >
                                             <Text>
-                                                {assignments[p.id] === d.id ? "✅ " : "⬜ "} {d.name} -{" "}
-                                                {d.vehicle}
+                                                {assignments[p.id] === d.id ? "✅ " : "⬜ "} 
+                                                {d.name} - {d.vehicle}
                                             </Text>
                                         </TouchableOpacity>
                                     ))}
@@ -201,9 +202,10 @@ const styles = StyleSheet.create({
     headerBar: {
         backgroundColor: "#afd826",
         paddingVertical: 14,
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
         flexDirection: "row",
         alignItems: "center",
+        justifyContent: "space-between",
         elevation: 4,
     },
     headerTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
@@ -242,7 +244,7 @@ const styles = StyleSheet.create({
         borderBottomColor: "#eee",
     },
 
-    tabs: { flexDirection: "row", marginBottom: 12, borderRadius: 8 },
+    tabs: { flexDirection: "row", marginBottom: 12 },
     tab: {
         flex: 1,
         padding: 12,
