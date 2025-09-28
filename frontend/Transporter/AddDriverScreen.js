@@ -22,6 +22,10 @@ export default function AddDriverScreen({ navigation }) {
   const [password, setPassword] = useState("");
   const [license, setLicense] = useState("");
   const [location, setLocation] = useState("");
+  const [employmentType, setEmploymentType] = useState("Fixed"); // Fixed or Contract
+  const [salary, setSalary] = useState(""); // For Fixed
+  const [hourlyRate, setHourlyRate] = useState(""); // For Contract
+  const [hoursPerMonth, setHoursPerMonth] = useState(""); // For Contract
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [inviteLink, setInviteLink] = useState("");
@@ -48,11 +52,30 @@ export default function AddDriverScreen({ navigation }) {
         "Location must be 20-100 chars, letters/digits/commas only."
       );
 
+    // Employment validation
+    if (employmentType === "Fixed") {
+      if (!/^\d+$/.test(salary)) return setErrorMsg("Enter a valid fixed salary.");
+    } else {
+      if (!/^\d+$/.test(hourlyRate)) return setErrorMsg("Enter a valid hourly rate.");
+      if (!/^\d+$/.test(hoursPerMonth)) return setErrorMsg("Enter valid hours per month.");
+    }
+
     // If all validation passes
     setErrorMsg("");
+
+    // Salary calculation
+    let finalSalary;
+    if (employmentType === "Fixed") {
+      finalSalary = parseInt(salary);
+    } else {
+      finalSalary = parseInt(hourlyRate) * parseInt(hoursPerMonth);
+    }
+
     const link = `https://raahi-app.com/invite?token=abcd1234`;
     setInviteLink(link);
-    setSuccessMsg(`Driver added successfully! Invite link generated below.`);
+    setSuccessMsg(
+      `Driver added successfully! Calculated Salary: Rs. ${finalSalary}. Invite link generated below.`
+    );
   };
 
   const copyLink = () => {
@@ -62,7 +85,6 @@ export default function AddDriverScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Status Bar */}
       <StatusBar
         backgroundColor="#afd826"
         barStyle="light-content"
@@ -78,7 +100,6 @@ export default function AddDriverScreen({ navigation }) {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Content */}
       <ScrollView style={styles.container}>
         <TextInput
           style={styles.input}
@@ -126,6 +147,63 @@ export default function AddDriverScreen({ navigation }) {
           onChangeText={setLocation}
         />
 
+        {/* Employment Type */}
+        <Text style={{ fontSize: 16, fontWeight: "600", marginVertical: 10 }}>
+          Employment Type
+        </Text>
+        <View style={{ flexDirection: "row", marginBottom: 12 }}>
+          <TouchableOpacity
+            style={[
+              styles.employmentBtn,
+              employmentType === "Fixed" && { backgroundColor: "#afd826" },
+            ]}
+            onPress={() => setEmploymentType("Fixed")}
+          >
+            <Text style={{ color: employmentType === "Fixed" ? "#fff" : "#333" }}>
+              Fixed Salary
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.employmentBtn,
+              employmentType === "Contract" && { backgroundColor: "#afd826" },
+            ]}
+            onPress={() => setEmploymentType("Contract")}
+          >
+            <Text style={{ color: employmentType === "Contract" ? "#fff" : "#333" }}>
+              Contract-Based
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Salary Input */}
+        {employmentType === "Fixed" ? (
+          <TextInput
+            style={styles.input}
+            placeholder="Enter Fixed Salary"
+            keyboardType="numeric"
+            value={salary}
+            onChangeText={setSalary}
+          />
+        ) : (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="Hourly Rate"
+              keyboardType="numeric"
+              value={hourlyRate}
+              onChangeText={setHourlyRate}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Hours Per Month"
+              keyboardType="numeric"
+              value={hoursPerMonth}
+              onChangeText={setHoursPerMonth}
+            />
+          </>
+        )}
+
         {/* Error / Success Messages */}
         {errorMsg ? (
           <View style={styles.msgBoxError}>
@@ -138,7 +216,12 @@ export default function AddDriverScreen({ navigation }) {
             {inviteLink ? (
               <TouchableOpacity style={styles.linkBox} onPress={copyLink}>
                 <Text style={styles.linkText}>{inviteLink}</Text>
-                <Ionicons name="copy-outline" size={18} color="#28a745" style={{ marginLeft: 6 }} />
+                <Ionicons
+                  name="copy-outline"
+                  size={18}
+                  color="#28a745"
+                  style={{ marginLeft: 6 }}
+                />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -223,5 +306,15 @@ const styles = StyleSheet.create({
   linkText: {
     color: "#28a745",
     fontSize: 14,
+  },
+  employmentBtn: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    marginRight: 10,
+    alignItems: "center",
+    backgroundColor: "#f9f9f9",
   },
 });
