@@ -34,6 +34,13 @@ const fetchTodayRoute = () => ({
   ],
 });
 
+// ✅ Sample History Data
+const driverHistory = [
+  { id: "1", routeName: "Van #9 – Morning Route", date: "20 Sep 2025", totalStudents: 12 },
+  { id: "2", routeName: "Van #11 – Evening Route", date: "25 Sep 2025", totalStudents: 8 },
+  { id: "3", routeName: "Van #12 – Morning Route", date: "1 Oct 2025", totalStudents: 10 },
+];
+
 export default function DriverDashboard({ navigation }) {
   const [route, setRoute] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -122,6 +129,14 @@ export default function DriverDashboard({ navigation }) {
     </View>
   );
 
+  const renderHistoryItem = ({ item }) => (
+    <View style={styles.historyCard}>
+      <Text style={styles.historyRoute}>{item.routeName}</Text>
+      <Text style={styles.historyText}>Date: {item.date}</Text>
+      <Text style={styles.historyText}>Students: {item.totalStudents}</Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor="#AFD826" barStyle="light-content" />
@@ -132,7 +147,13 @@ export default function DriverDashboard({ navigation }) {
           <Ionicons name="menu" size={26} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {screen === "dashboard" ? "Dashboard" : "Availability"}
+          {screen === "dashboard"
+            ? "Dashboard"
+            : screen === "availability"
+            ? "Availability"
+            : screen === "history"
+            ? "Driver History"
+            : "Help & Support"}
         </Text>
         <View style={{ width: 26 }} />
       </View>
@@ -176,6 +197,30 @@ export default function DriverDashboard({ navigation }) {
             >
               <Ionicons name="time-outline" size={22} color="#000" />
               <Text style={styles.sidebarText}>Availability</Text>
+            </TouchableOpacity>
+
+            {/* ✅ New Driver History Option */}
+            <TouchableOpacity
+              style={styles.sidebarItem}
+              onPress={() => {
+                setScreen("history");
+                toggleSidebar();
+              }}
+            >
+              <Ionicons name="calendar-outline" size={22} color="#000" />
+              <Text style={styles.sidebarText}>Driver History</Text>
+            </TouchableOpacity>
+
+            {/* ✅ Help & Support */}
+            <TouchableOpacity
+              style={styles.sidebarItem}
+              onPress={() => {
+                setScreen("support");
+                toggleSidebar();
+              }}
+            >
+              <Ionicons name="help-circle-outline" size={22} color="#000" />
+              <Text style={styles.sidebarText}>Help & Support</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.logoutItem} onPress={handleLogout}>
@@ -227,11 +272,10 @@ export default function DriverDashboard({ navigation }) {
               <Text style={styles.noRouteText}>No route assigned for today</Text>
             </View>
           )
-        ) : (
+        ) : screen === "availability" ? (
           <View style={{ flex: 1 }}>
-            {/* ✅ Availability Section */}
             <View style={styles.availabilityHeader}>
-              <Text style={styles.sectionLabel}>Confirm your Availability:</Text>
+              <Text style={styles.sectionLabel}>Confirm your Availability?</Text>
 
               <Text style={styles.statusText}>
                 Status:{" "}
@@ -241,7 +285,6 @@ export default function DriverDashboard({ navigation }) {
               </Text>
 
               <View style={styles.switchContainer}>
-                <Text style={{ fontSize: 16, marginRight: 10 }}></Text>
                 <Switch
                   value={isAvailable}
                   onValueChange={toggleAvailability}
@@ -251,7 +294,6 @@ export default function DriverDashboard({ navigation }) {
               </View>
             </View>
 
-            {/* ✅ Show slots only when Available */}
             {isAvailable && (
               <View style={styles.slotSection}>
                 <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>
@@ -278,16 +320,38 @@ export default function DriverDashboard({ navigation }) {
               </View>
             )}
 
-            {/* ✅ Notification Button (for both Available & Not Available) */}
             <TouchableOpacity style={styles.notifyBtn} onPress={sendNotification}>
               <Text style={styles.notifyBtnText}>Send Notification to Transporter</Text>
             </TouchableOpacity>
+          </View>
+        ) : screen === "history" ? (
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionLabel, { marginLeft: 20, marginTop: 10 }]}>
+              Driver Route History
+            </Text>
+            <FlatList
+              data={driverHistory}
+              renderItem={renderHistoryItem}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 20 }}
+            />
+          </View>
+        ) : (
+          <View style={{ padding: 20 }}>
+            <Text style={styles.sectionLabel}>Help & Support</Text>
+            <Text style={{ fontSize: 15, color: "#333", lineHeight: 22 }}>
+              For any issues or assistance, please contact our support team at:
+              {"\n\n"}📞 +92 300 9876543{"\n"}✉️ support@smarttranspo.com{"\n\n"}
+              Our support team is available 24/7 to assist drivers with any technical or route-related concerns.
+            </Text>
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// ✅ STYLES (unchanged except new cards)
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -304,7 +368,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
   },
-  // ✅ Header text now aligned right
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
@@ -312,15 +375,12 @@ const styles = StyleSheet.create({
     textAlign: "left",
     flex: 1,
   },
-
   scrollContainer: {
     flex: 1,
     backgroundColor: "#F9FAFB",
     paddingHorizontal: 10,
     paddingTop: 10,
   },
-
-  // ✅ Dashboard Cards: consistent spacing
   card: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -332,15 +392,8 @@ const styles = StyleSheet.create({
   profileRow: { flexDirection: "row", alignItems: "center" },
   driverName: { fontSize: 18, fontWeight: "700", color: "#000" },
   driverSub: { fontSize: 14, color: "#555", marginTop: 2 },
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#222",
-    marginBottom: 8,
-  },
+  sectionLabel: { fontSize: 15, fontWeight: "600", color: "#222", marginBottom: 8 },
   routeName: { fontSize: 16, fontWeight: "600", color: "#000" },
-
-  // ✅ Passenger card spacing improved
   passengerCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -353,11 +406,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderColor: "#AFD826",
   },
-
   passengerInfo: { flex: 1 },
   passengerName: { fontSize: 16, fontWeight: "600", color: "#000" },
   passengerText: { fontSize: 14, color: "#333", marginTop: 2 },
-
   startBtn: {
     backgroundColor: "#AFD826",
     padding: 16,
@@ -368,11 +419,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   startBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-
   noRouteBox: { justifyContent: "center", alignItems: "center", marginTop: 50 },
   noRouteText: { fontSize: 16, color: "#555" },
-
-  // ✅ Sidebar improved — profile area lower
   sidebar: {
     position: "absolute",
     top: 0,
@@ -386,7 +434,7 @@ const styles = StyleSheet.create({
   },
   sidebarHeader: {
     alignItems: "center",
-    paddingVertical: 50, // ⬅️ increased from 30 to bring profile lower
+    paddingVertical: 50,
     backgroundColor: "#F9FAFB",
     borderBottomWidth: 1,
     borderColor: "#eee",
@@ -428,7 +476,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   sidebarText: { fontSize: 16, color: "#000" },
-
   availabilityHeader: {
     padding: 20,
     backgroundColor: "#fff",
@@ -438,7 +485,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   statusText: { fontSize: 16, marginTop: 6 },
-
   slotSection: { flex: 1, paddingHorizontal: 20, paddingTop: 10 },
   slotBox: {
     flexDirection: "row",
@@ -472,8 +518,6 @@ const styles = StyleSheet.create({
     padding: 10,
     elevation: 3,
   },
-
-  // ✅ Notification button (unchanged)
   notifyBtn: {
     backgroundColor: "#AFD826",
     padding: 14,
@@ -484,4 +528,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   notifyBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  // ✅ History styles
+  historyCard: {
+    backgroundColor: "#fff",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 12,
+    elevation: 2,
+  },
+  historyRoute: { fontSize: 16, fontWeight: "600", color: "#000" },
+  historyText: { fontSize: 14, color: "#333", marginTop: 4 },
 });
