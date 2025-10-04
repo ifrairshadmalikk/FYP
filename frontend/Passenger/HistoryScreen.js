@@ -1,38 +1,36 @@
 import React from "react";
-import { View, Text, StyleSheet, FlatList } from "react-native";
+import { SafeAreaView, Text, View, FlatList } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
+import styles from "../styles/PassengerStyles/historyStyles";
 
 export default function HistoryScreen() {
-    const history = [
-        { id: "1", date: "12 Feb", pickup: "Gulshan", drop: "University" },
-        { id: "2", date: "11 Feb", pickup: "Gulshan", drop: "University" },
-    ];
+  const rides = [
+    { id: "1", date: "15-12-2024", time: "08:30 AM", status: "completed", pickup: "Block 13D" },
+    { id: "2", date: "14-12-2024", time: "08:30 AM", status: "completed", pickup: "Block 13D" },
+    { id: "3", date: "13-12-2024", time: "08:30 AM", status: "missed", pickup: "Block 13D" },
+  ];
 
-    return (
-        <View style={styles.container}>
-            <Text style={styles.heading}>📜 Ride History</Text>
-            <FlatList
-                data={history}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <View style={styles.listItem}>
-                        <Text>{item.date}</Text>
-                        <Text>{item.pickup} → {item.drop}</Text>
-                    </View>
-                )}
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Ride History</Text>
+
+      <FlatList
+        data={rides}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.row}>
+            <Icon
+              name={item.status === "completed" ? "check-circle" : "times-circle"}
+              size={18}
+              color={item.status === "completed" ? "green" : "red"}
             />
-        </View>
-    );
+            <View style={styles.info}>
+              <Text style={styles.date}>{item.date} • {item.time}</Text>
+              <Text style={styles.place}>{item.pickup} • {item.status}</Text>
+            </View>
+          </View>
+        )}
+      />
+    </SafeAreaView>
+  );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#fff", padding: 16 },
-    heading: { fontSize: 20, fontWeight: "700", marginBottom: 15, color: "#111" },
-    listItem: {
-        padding: 12,
-        backgroundColor: "#f9fafb",
-        borderBottomWidth: 1,
-        borderColor: "#e5e7eb",
-        borderRadius: 8,
-        marginBottom: 8,
-    },
-});
