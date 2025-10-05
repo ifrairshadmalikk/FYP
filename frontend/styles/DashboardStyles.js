@@ -9,6 +9,11 @@ export default StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
+  centerBox: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   logo: {
     width: 500,
     height: 200,
