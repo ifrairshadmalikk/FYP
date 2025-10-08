@@ -75,7 +75,7 @@ export default function DriverDashboard({ navigation }) {
   const formatTime = (date) => {
     const hours = date.getHours();
     const minutes = date.getMinutes();
-    return `${hours % 12 || 12}:${minutes < 10 ? '0'+minutes : minutes} ${hours < 12 ? 'AM' : 'PM'}`;
+    return `${hours % 12 || 12}:${minutes < 10 ? '0' + minutes : minutes} ${hours < 12 ? 'AM' : 'PM'}`;
   };
 
   const handleFromConfirm = (date) => {
