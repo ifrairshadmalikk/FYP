@@ -3,6 +3,7 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createDrawerNavigator } from "@react-navigation/drawer";
+
 // Screens
 import Onboarding from "./frontend/screens/Onboarding";
 import WelcomeScreen from "./frontend/screens/WelcomeScreen";
@@ -14,9 +15,11 @@ import TransporterRegisterScreen from "./frontend/screens/TransporterRegisterScr
 import PassengerTransporterSelectionScreen from "./frontend/screens/PassengerTransporterSelectionScreen";
 import TransporterLoginScreen from "./frontend/screens/TransporterLoginScreen";
 
-// Passenger App
-import PassengerApp from "./frontend/Passenger/PassengerApp";
-import PassengerLoginScreen from "./frontend/Passenger/PassengerLoginScreen";
+// Passenger Screens
+import PassengerAppNavigation from "./frontend/Passenger/screens/PassengerAppNavigation";
+import PassengerLoginScreen from "./frontend/Passenger/screens/PassengerLoginScreen";
+import PassengerDashboard from "./frontend/Passenger/screens/PassengerDashboard";
+
 
 // Transporter Screens
 import TransporterDashboardScreen from "./frontend/Transporter/TransporterDashboard";
@@ -42,11 +45,12 @@ import DriverTrackingScreen from "./frontend/Driver/DriverTrackingScreen";
 const Stack = createStackNavigator();
 const Drawer = createDrawerNavigator();
 
+// ✅ Transporter Drawer Navigation
 function TransporterDrawer() {
   return (
     <Drawer.Navigator
       screenOptions={{
-        headerShown: false,  // ہم custom header dashboard میں بنائیں گے
+        headerShown: false,
         drawerType: "slide",
         drawerStyle: {
           backgroundColor: "#fff",
@@ -54,7 +58,7 @@ function TransporterDrawer() {
         },
       }}
     >
-      <Drawer.Screen name="Dashboard" component={TransporterDashboard} />
+      <Drawer.Screen name="Dashboard" component={TransporterDashboardScreen} />
       <Drawer.Screen name="Passenger List" component={PassengerList} />
       <Drawer.Screen name="Driver List" component={DriverList} />
       <Drawer.Screen name="Payments" component={PaymentsScreen} />
@@ -67,24 +71,25 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {/* Initial Flow */}
+        {/* 🌟 Initial Flow */}
         <Stack.Screen name="Onboarding" component={Onboarding} />
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
 
-        {/* Registration Flow */}
+        {/* 🌟 Registration Flow */}
         <Stack.Screen name="DashboardRegister" component={DashboardRegisterScreen} />
         <Stack.Screen name="PassengerRegister" component={PassengerRegisterScreen} />
         <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
         <Stack.Screen name="TransporterRegister" component={TransporterRegisterScreen} />
         <Stack.Screen name="TransporterLogin" component={TransporterLoginScreen} />
 
-        {/* Passenger Flow */}
-        <Stack.Screen name="PassengerTransporterSelection" component={PassengerTransporterSelectionScreen} />
-        <Stack.Screen name="PassengerApp" component={PassengerApp} />
-        <Stack.Screen name="PassengerLoginScreen" component={PassengerLoginScreen} />
+        {/* 🌟 Passenger Flow */}
+        <Stack.Screen name="PassengerLogin" component={PassengerLoginScreen} />
 
-        {/* Transporter Flow */}
+
+        <Stack.Screen name="PassengerAppNavigation" component={PassengerAppNavigation} />
+
+        {/* 🌟 Transporter Flow */}
         <Stack.Screen name="Transporter" component={TransporterDrawer} />
         <Stack.Screen name="TransporterDashboard" component={TransporterDashboardScreen} />
         <Stack.Screen name="PassengerList" component={PassengerList} />
@@ -101,7 +106,7 @@ export default function App() {
         <Stack.Screen name="SmartScheduling" component={SmartScheduling} />
         <Stack.Screen name="AssignRoute" component={AssignRoutesScreen} />
 
-        {/* Driver */}
+        {/* 🌟 Driver Flow */}
         <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
         <Stack.Screen name="VanTrackingdriver" component={DriverTrackingScreen} />
         <Stack.Screen name="CreatePoll" component={CreateDailyPoll} />

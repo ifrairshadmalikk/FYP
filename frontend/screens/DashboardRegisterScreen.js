@@ -15,9 +15,9 @@ export default function DashboardRegisterScreen({ navigation }) {
     setErrorMsg("");
 
 
-    if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
+    
 
-    if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
+    if (role === "Passenger") navigation.navigate("PassengerLogin");
 
     if (role === "Driver") navigation.navigate("DriverRegister");
     if (role === "Transporter") navigation.navigate("TransporterRegister");
