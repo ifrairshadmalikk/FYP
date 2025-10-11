@@ -27,7 +27,6 @@ import PassengerList from "./frontend/Transporter/PassengerList";
 import DriverList from "./frontend/Transporter/DriverList";
 import AddDriverScreen from "./frontend/Transporter/AddDriverScreen";
 import AddPassengerScreen from "./frontend/Transporter/AddPassengerScreen";
-import ManageRecordsScreen from "./frontend/Transporter/ManageRecordsScreen";
 import PaymentsScreen from "./frontend/Transporter/PaymentsScreen";
 import VanTrackingScreen from "./frontend/Transporter/VanTrackingScreen";
 import AlertsScreen from "./frontend/Transporter/AlertsScreen";
@@ -37,6 +36,8 @@ import RouteAssignment from "./frontend/Transporter/RouteAssignment";
 import SmartScheduling from "./frontend/Transporter/SmartScheduling";
 import CreateDailyPoll from "./frontend/Transporter/CreateDailyPoll";
 import AssignRoutesScreen from "./frontend/Transporter/AssignRoutesScreen";
+import DriverProfile from "./frontend/Transporter/DriverProfile";
+import PassengerProfile from "./frontend/Passenger/PassengerProfile";
 
 // Driver
 import DriverDashboard from "./frontend/Driver/DriverDashboard";
@@ -96,7 +97,6 @@ export default function App() {
         <Stack.Screen name="DriverList" component={DriverList} />
         <Stack.Screen name="AddDriver" component={AddDriverScreen} />
         <Stack.Screen name="AddPassenger" component={AddPassengerScreen} />
-        <Stack.Screen name="ManageRecords" component={ManageRecordsScreen} />
         <Stack.Screen name="Payments" component={PaymentsScreen} />
         <Stack.Screen name="VanTracking" component={VanTrackingScreen} />
         <Stack.Screen name="Alerts" component={AlertsScreen} />
@@ -105,6 +105,8 @@ export default function App() {
         <Stack.Screen name="RouteAssignment" component={RouteAssignment} />
         <Stack.Screen name="SmartScheduling" component={SmartScheduling} />
         <Stack.Screen name="AssignRoute" component={AssignRoutesScreen} />
+        <Stack.Screen name="PassengerProfile" component={DriverProfile} />
+        <Stack.Screen name="DriverProfile" component={DriverProfile} />
 
         {/* 🌟 Driver Flow */}
         <Stack.Screen name="DriverDashboard" component={DriverDashboard} />

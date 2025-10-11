@@ -59,27 +59,10 @@ export default function DriverDashboard({ navigation }) {
     setRoute(fetchTodayRoute());
   }, []);
 
-  const toggleSidebar = () => {
-    Animated.timing(sidebarAnim, {
-      toValue: showSidebar ? -width * 0.7 : 0,
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
-    setShowSidebar(!showSidebar);
-  };
-
-  const pickImage = async () => {
-    const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!granted) {
-      Alert.alert("Permission Required", "Please allow access to your gallery to upload an image.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled) setProfileImage(result.assets[0].uri);
+  const formatTime = (date) => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    return `${hours % 12 || 12}:${minutes < 10 ? '0'+minutes : minutes} ${hours < 12 ? 'AM' : 'PM'}`;
   };
 
   const handleAddSlot = () => {

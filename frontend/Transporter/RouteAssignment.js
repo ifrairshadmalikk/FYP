@@ -102,7 +102,9 @@ export default function RouteAssignment({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F9FAFB", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
+  safeArea: {
+    flex: 1, backgroundColor: "#F9FAFB",
+  },
   headerContainer: { height: 60, backgroundColor: "#afd826", flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 15 },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
   container: { padding: 15 },
@@ -116,6 +118,5 @@ const styles = StyleSheet.create({
   card: { backgroundColor: "#fff", borderRadius: 12, padding: 15, marginBottom: 12, elevation: 3 },
   routeName: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
 });
-
 
 

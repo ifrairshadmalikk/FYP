@@ -9,8 +9,9 @@ import {
     SafeAreaView,
     StatusBar,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-export default function CreateDailyPoll() {
+export default function CreateDailyPoll({ navigation }) {
     const [step, setStep] = useState(1);
 
     // States
@@ -28,18 +29,14 @@ export default function CreateDailyPoll() {
         { name: "Johar Town", passengers: 87, selected: false },
     ]);
 
-    // 🔹 Custom Header
+    // 🔹 Custom Header (PassengerPerformance style)
     const Header = ({ title }) => (
         <View style={styles.headerBar}>
-            {step > 1 ? (
-                <TouchableOpacity onPress={() => setStep(step - 1)}>
-                    <Text style={styles.backArrow}>←</Text>
-                </TouchableOpacity>
-            ) : (
-                <View style={{ width: 30 }} />
-            )}
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
             <Text style={styles.headerTitle}>{title}</Text>
-            <View style={{ width: 30 }} />
+            <View style={{ width: 24 }} />
         </View>
     );
 
@@ -97,7 +94,7 @@ export default function CreateDailyPoll() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Start & End Time same line */}
+                    {/* Start & End Time */}
                     <View style={styles.rowBetween}>
                         <View style={{ flex: 1, marginRight: 6 }}>
                             <Text style={styles.slotLabel}>Start Time</Text>
@@ -297,13 +294,11 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        paddingVertical: 15,
-        paddingHorizontal: 10,
+        paddingHorizontal: 15,
+        height: 60,
         backgroundColor: "#afd826",
         elevation: 4,
-        marginTop: 5,
     },
-    backArrow: { fontSize: 22, color: "#fff" },
     headerTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
 
     addBtn: {
