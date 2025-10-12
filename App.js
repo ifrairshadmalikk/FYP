@@ -21,6 +21,7 @@ import PassengerLoginScreen from "./frontend/Passenger/screens/PassengerLoginScr
 import PassengerDashboard from "./frontend/Passenger/screens/PassengerDashboard";
 
 
+
 // Transporter Screens
 import TransporterDashboardScreen from "./frontend/Transporter/TransporterDashboard";
 import PassengerList from "./frontend/Transporter/PassengerList";
@@ -85,10 +86,8 @@ export default function App() {
         <Stack.Screen name="TransporterLogin" component={TransporterLoginScreen} />
 
         {/* 🌟 Passenger Flow */}
-        <Stack.Screen name="PassengerLogin" component={PassengerLoginScreen} />
-
-
-        <Stack.Screen name="PassengerAppNavigation" component={PassengerAppNavigation} />
+                <Stack.Screen name="PassengerLoginScreen" component={PassengerLoginScreen} />
+                <Stack.Screen name="PassengerAppNavigation" component={PassengerAppNavigation} />
 
         {/* 🌟 Transporter Flow */}
         <Stack.Screen name="Transporter" component={TransporterDrawer} />

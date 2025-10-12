@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Image } from "react-native";
+import { View, Text, TouchableOpacity, Image, Alert } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import styles from "../styles/DashboardStyles";
 
@@ -8,19 +8,30 @@ export default function DashboardRegisterScreen({ navigation }) {
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleNext = () => {
+    // Validate role selection
     if (!role) {
       setErrorMsg("Please select a valid user role.");
       return;
     }
-    setErrorMsg("");
+    
+    setErrorMsg(""); // Clear any existing error messages
 
-
-    if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
-
-    if (role === "Passenger") navigation.navigate("PassengerLoginScreen");
-
-    if (role === "Driver") navigation.navigate("DriverRegister");
-    if (role === "Transporter") navigation.navigate("TransporterRegister");
+    // Navigate based on selected role
+    switch (role) {
+      case "Driver":
+        navigation.navigate("DriverRegister");
+        break;
+      case "Transporter":
+        navigation.navigate("TransporterRegister");
+        break;
+      case "Passenger":
+        navigation.navigate("PassengerLoginScreen");
+        break;
+      default:
+        // Fallback for unexpected values
+        setErrorMsg("Invalid role selected. Please try again.");
+        break;
+    }
   };
 
   return (
@@ -33,6 +44,7 @@ export default function DashboardRegisterScreen({ navigation }) {
           }}
           style={styles.logo}
           resizeMode="contain"
+          onError={() => console.log("Failed to load logo")}
         />
 
         <Text style={styles.title}>Select Your Role</Text>
@@ -41,7 +53,8 @@ export default function DashboardRegisterScreen({ navigation }) {
         <View style={styles.pickerBox}>
           <Picker
             selectedValue={role}
-            onValueChange={(value) => setRole(value)}
+            onValueChange={(itemValue) => setRole(itemValue)}
+            testID="role-picker"
           >
             <Picker.Item label="Select Role" value="" />
             <Picker.Item label="Passenger" value="Passenger" />
@@ -51,10 +64,22 @@ export default function DashboardRegisterScreen({ navigation }) {
         </View>
 
         {/* Error Message */}
-        {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
+        {errorMsg ? (
+          <Text style={styles.error} testID="error-message">
+            {errorMsg}
+          </Text>
+        ) : null}
 
-        {/* Button */}
-        <TouchableOpacity style={styles.submitBtn} onPress={handleNext}>
+        {/* Next Button */}
+        <TouchableOpacity 
+          style={[
+            styles.submitBtn, 
+            !role && styles.submitBtnDisabled // Optional: Add disabled style
+          ]} 
+          onPress={handleNext}
+          disabled={!role} // Optional: Disable button when no role selected
+          testID="next-button"
+        >
           <Text style={styles.submitText}>Next</Text>
         </TouchableOpacity>
       </View>
