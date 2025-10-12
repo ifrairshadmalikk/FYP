@@ -37,7 +37,7 @@ import SmartScheduling from "./frontend/Transporter/SmartScheduling";
 import CreateDailyPoll from "./frontend/Transporter/CreateDailyPoll";
 import AssignRoutesScreen from "./frontend/Transporter/AssignRoutesScreen";
 import DriverProfile from "./frontend/Transporter/DriverProfile";
-import PassengerProfile from "./frontend/Transporter/PassengerProfile";
+import PassengerProfile from "./frontend/Passenger/PassengerProfile";
 
 // Driver
 import DriverDashboard from "./frontend/Driver/DriverDashboard";
