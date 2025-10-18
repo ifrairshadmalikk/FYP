@@ -1,0 +1,160 @@
+import { StyleSheet, Dimensions, Platform } from "react-native";
+
+const { width, height } = Dimensions.get("window");
+
+export default StyleSheet.create({
+  scrollContainer: {
+    flexGrow: 1,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    minHeight: height,
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    paddingBottom: 30,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 40,
+    marginTop: 20,
+  },
+  logo: {
+    width: 160,
+    height: 80,
+    marginBottom: 20,
+  },
+  welcomeText: {
+    color: "#111827",
+    fontSize: 32,
+    fontWeight: "800",
+    marginBottom: 8,
+    textAlign: "center",
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    color: "#6b7280",
+    fontSize: 18,
+    textAlign: "center",
+    fontWeight: "400",
+    lineHeight: 24,
+  },
+  roleCard: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 20,
+    padding: 30,
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cardTitle: {
+    color: "#111827",
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 25,
+    textAlign: "center",
+    lineHeight: 30,
+  },
+  pickerContainer: {
+    marginBottom: 20,
+  },
+  pickerLabel: {
+    color: "#374151",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  pickerWrapper: {
+    backgroundColor: "#ffffff",
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: "#d1d5db",
+    overflow: "hidden",
+    marginBottom: 5,
+  },
+  pickerActive: {
+    borderColor: "#afd826",
+  },
+  picker: {
+    height: 60,
+    color: "#111827",
+    fontSize: 16,
+  },
+  benefitsContainer: {
+    backgroundColor: "#ffffff",
+    borderRadius: 15,
+    padding: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: "#afd826",
+    marginTop: 15,
+  },
+  benefitsTitle: {
+    color: "#111827",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  benefitsText: {
+    color: "#4b5563",
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "400",
+  },
+  errorContainer: {
+    backgroundColor: "#fef2f2",
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: "#ef4444",
+    marginTop: 15,
+  },
+  errorText: {
+    color: "#dc2626",
+    fontSize: 14,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  continueButton: {
+    paddingVertical: 18,
+    borderRadius: 15,
+    alignItems: "center",
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  buttonActive: {
+    backgroundColor: "#afd826",
+  },
+  buttonDisabled: {
+    backgroundColor: "#9ca3af",
+    shadowOpacity: 0,
+  },
+  buttonText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  footerNote: {
+    color: "#6b7280",
+    fontSize: 14,
+    textAlign: "center",
+    fontStyle: "italic",
+    lineHeight: 20,
+  },
+});
