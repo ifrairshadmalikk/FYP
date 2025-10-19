@@ -20,6 +20,12 @@ const UnifiedDriverDashboard = ({ navigation }) => {
     monthlyEarnings: 35000
   });
 
+  // Availability states
+  const [availabilityModalVisible, setAvailabilityModalVisible] = useState(false);
+  const [startTime, setStartTime] = useState("07:00 AM");
+  const [endTime, setEndTime] = useState("06:00 PM");
+  const [availabilityDate, setAvailabilityDate] = useState(new Date());
+
   // Routes states
   const [routeStarted, setRouteStarted] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(0);
@@ -161,7 +167,7 @@ const UnifiedDriverDashboard = ({ navigation }) => {
       fare: 2800, 
       passengers: 5, 
       rating: null, 
-      vehicle: "Coaster - LEA-4567", 
+      vehicle: "Coaster - LEA-4567",
       cancellationReason: "Vehicle maintenance required" 
     },
     { 
@@ -228,25 +234,34 @@ const UnifiedDriverDashboard = ({ navigation }) => {
   const [notifications, setNotifications] = useState([
     { 
       id: 1, 
-      title: "Payment Received", 
-      message: "Your payment for October 2025 has been transferred to your Easypaisa account.", 
+      title: "Day Off Granted", 
+      message: "The transporter has granted you a day off for tomorrow (20 Oct 2025). Enjoy your rest!", 
+      time: "1 hour ago", 
+      type: "info",
+      read: false,
+      timestamp: new Date().toISOString()
+    },
+    { 
+      id: 2, 
+      title: "Route Assigned for Tomorrow", 
+      message: "You have been assigned Morning Pickup Route for tomorrow (20 Oct 2025). Please check route details.", 
       time: "2 hours ago", 
       type: "success",
       read: false,
       timestamp: new Date().toISOString()
     },
     { 
-      id: 2, 
-      title: "New Route Assigned", 
-      message: "You have been assigned Morning Pickup Route for tomorrow (20 Oct 2025).", 
+      id: 3, 
+      title: "Payment Received", 
+      message: "Your payment for October 2025 has been transferred to your Easypaisa account.", 
       time: "5 hours ago", 
-      type: "info",
+      type: "success",
       read: false,
       timestamp: new Date().toISOString()
     },
     { 
-      id: 3, 
-      title: "Availability Confirmation", 
+      id: 4, 
+      title: "Availability Confirmation Required", 
       message: "Please confirm your availability for tomorrow's route assignment.", 
       time: "1 day ago", 
       type: "warning",
@@ -254,7 +269,7 @@ const UnifiedDriverDashboard = ({ navigation }) => {
       timestamp: new Date().toISOString()
     },
     { 
-      id: 4, 
+      id: 5, 
       title: "Trip Completed", 
       message: "You have successfully completed the Morning Pickup Route.", 
       time: "2 days ago", 
@@ -299,6 +314,13 @@ const UnifiedDriverDashboard = ({ navigation }) => {
       return () => clearTimeout(timer);
     }
   }, [routeStarted, currentLocation]);
+
+  // Format date for tomorrow
+  const getTomorrowDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
 
   // Navigation
   const navigateTo = (view) => {
@@ -427,6 +449,30 @@ const UnifiedDriverDashboard = ({ navigation }) => {
     setNotifications([newNotif, ...notifications]);
   };
 
+  // Handle availability confirmation
+  const handleConfirmAvailability = () => {
+    Alert.alert(
+      "Confirm Availability",
+      `Confirming your availability for ${getTomorrowDate()} from ${startTime} to ${endTime}. This will be sent to the transporter.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          onPress: () => {
+            setAvailable(true);
+            setAvailabilityModalVisible(false);
+            addNotification(
+              "Availability Confirmed",
+              `Your availability for ${getTomorrowDate()} (${startTime} - ${endTime}) has been sent to the transporter.`,
+              "success"
+            );
+            Alert.alert("Success", "Your availability has been confirmed and sent to the transporter!");
+          }
+        }
+      ]
+    );
+  };
+
   // Support ticket submission
   const handleSubmitTicket = () => {
     if (!ticketSubject.trim() || !ticketDescription.trim()) {
@@ -516,34 +562,6 @@ const UnifiedDriverDashboard = ({ navigation }) => {
   const renderDashboard = () => (
     <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.contentPadding}>
-        {/* Availability Confirmation Card - FR-2.3 */}
-        <View style={styles.card}>
-          <View style={styles.availabilityRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>Tomorrow's Availability</Text>
-              <Text style={styles.cardText}>Confirm if you're available for tomorrow's route assignment</Text>
-            </View>
-            <Switch
-              value={available}
-              onValueChange={(value) => {
-                setAvailable(value);
-                addNotification(
-                  "Availability Updated",
-                  value ? "You are now available for tomorrow's route" : "You are unavailable for tomorrow",
-                  "info"
-                );
-              }}
-              trackColor={{ false: "#e5e7eb", true: "#A1D826" }}
-              thumbColor="#fff"
-            />
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: available ? "#f0f9d8" : "#f3f4f6" }]}>
-            <Text style={[styles.statusText, { color: available ? "#5a6b0f" : "#6b7280" }]}>
-              {available ? "Available for tomorrow" : "Not available for tomorrow"}
-            </Text>
-          </View>
-        </View>
-
         {/* Dashboard Statistics - FR-2.2.2 */}
         <Text style={styles.sectionTitle}>Dashboard Overview</Text>
         <View style={styles.statsGrid}>
@@ -650,6 +668,200 @@ const UnifiedDriverDashboard = ({ navigation }) => {
               <Ionicons name="chevron-forward" size={20} color="#A1D826" />
             </View>
           </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  );
+
+  const renderAvailability = () => (
+    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.contentPadding}>
+        {/* Current Status Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Current Availability Status</Text>
+          <View style={{ alignItems: "center", paddingVertical: 20 }}>
+            <Ionicons 
+              name={available ? "checkmark-circle" : "close-circle"} 
+              size={64} 
+              color={available ? "#A1D826" : "#999"} 
+            />
+            <Text style={{ 
+              fontSize: 18, 
+              fontWeight: "700", 
+              color: available ? "#A1D826" : "#999", 
+              marginTop: 12 
+            }}>
+              {available ? "Available for Tomorrow" : "Not Available"}
+            </Text>
+            {available && (
+              <View style={{ marginTop: 10, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: "#666" }}>
+                  Date: {getTomorrowDate()}
+                </Text>
+                <Text style={{ fontSize: 14, color: "#666", marginTop: 4 }}>
+                  Time: {startTime} - {endTime}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Confirm Availability Section */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Confirm Tomorrow's Availability</Text>
+          <Text style={styles.cardText}>
+            Let the transporter know your available timings for {getTomorrowDate()}
+          </Text>
+
+          <View style={{ marginTop: 20 }}>
+            <Text style={{ fontSize: 15, fontWeight: "600", color: "#333", marginBottom: 10 }}>
+              Start Time
+            </Text>
+            <View style={{
+              backgroundColor: "#f9f9f9",
+              borderWidth: 1,
+              borderColor: "#e5e5e5",
+              borderRadius: 12,
+              padding: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 20
+            }}>
+              <Ionicons name="time-outline" size={20} color="#A1D826" style={{ marginRight: 10 }} />
+              <TextInput
+                style={{ flex: 1, fontSize: 15, color: "#333" }}
+                placeholder="07:00 AM"
+                value={startTime}
+                onChangeText={setStartTime}
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            <Text style={{ fontSize: 15, fontWeight: "600", color: "#333", marginBottom: 10 }}>
+              End Time
+            </Text>
+            <View style={{
+              backgroundColor: "#f9f9f9",
+              borderWidth: 1,
+              borderColor: "#e5e5e5",
+              borderRadius: 12,
+              padding: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 20
+            }}>
+              <Ionicons name="time-outline" size={20} color="#A1D826" style={{ marginRight: 10 }} />
+              <TextInput
+                style={{ flex: 1, fontSize: 15, color: "#333" }}
+                placeholder="06:00 PM"
+                value={endTime}
+                onChangeText={setEndTime}
+                placeholderTextColor="#999"
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleConfirmAvailability}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.buttonText}>Confirm Availability</Text>
+          </TouchableOpacity>
+
+         ({available && (
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: "#F44336", marginTop: 12 }]}
+              onPress={() => {
+                Alert.alert(
+                  "Mark Unavailable",
+                  "Are you sure you want to mark yourself as unavailable for tomorrow?",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Yes, Unavailable",
+                      style: "destructive",
+                      onPress: () => {
+                        setAvailable(false);
+                        addNotification(
+                          "Marked Unavailable",
+                          `You have marked yourself as unavailable for ${getTomorrowDate()}.`,
+                          "warning"
+                        );
+                        Alert.alert("Updated", "You have been marked as unavailable for tomorrow.");
+                      }
+                    }
+                  ]
+                );
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.buttonText}>Mark Unavailable</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Information Card */}
+        <View style={[styles.card, { backgroundColor: "#F0F9D9" }]}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+            <Ionicons name="information-circle" size={24} color="#6B8E23" style={{ marginRight: 12 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#6B8E23", marginBottom: 8 }}>
+                Important Information
+              </Text>
+              <Text style={{ fontSize: 14, color: "#6B8E23", lineHeight: 20 }}>
+                • Please confirm your availability before 6:00 PM daily{"\n"}
+                • Your availability will be sent to the transporter{"\n"}
+                • You'll receive a notification once route is assigned{"\n"}
+                • Update your timings if there are any changes
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Recent Availability History */}
+        <Text style={styles.sectionTitle}>Recent Availability History</Text>
+        {[
+          { date: "19 Oct 2025", status: "Available", time: "07:00 AM - 06:00 PM", assigned: true },
+          { date: "18 Oct 2025", status: "Available", time: "07:00 AM - 06:00 PM", assigned: true },
+          { date: "17 Oct 2025", status: "Unavailable", time: "-", assigned: false },
+          { date: "16 Oct 2025", status: "Available", time: "07:00 AM - 05:00 PM", assigned: true },
+        ].map((item, index) => (
+          <View key={index} style={styles.card}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#333" }}>{item.date}</Text>
+              <View style={[styles.statusBadge, { 
+                backgroundColor: item.status === "Available" ? "#E8F5E9" : "#FFEBEE",
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 12
+              }]}>
+                <Text style={{ 
+                  fontSize: 12, 
+                  fontWeight: "600", 
+                  color: item.status === "Available" ? "#4CAF50" : "#F44336" 
+                }}>
+                  {item.status}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}>
+              <Ionicons name="time-outline" size={14} color="#999" />
+              <Text style={{ fontSize: 14, color: "#666", marginLeft: 6 }}>
+                {item.time}
+              </Text>
+            </View>
+            {item.assigned && (
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6 }}>
+                <Ionicons name="checkmark-circle" size={14} color="#A1D826" />
+                <Text style={{ fontSize: 13, color: "#A1D826", marginLeft: 6 }}>
+                  Route was assigned
+                </Text>
+              </View>
+            )}
+          </View>
         ))}
       </View>
     </ScrollView>
@@ -1316,6 +1528,7 @@ const UnifiedDriverDashboard = ({ navigation }) => {
             <ScrollView style={styles.sidebarMenu}>
               {[
                 { view: "Dashboard", title: "Dashboard", icon: "home" },
+                { view: "Availability", title: "Confirm Availability", icon: "calendar-outline" },
                 { view: "Routes", title: "Assigned Routes", icon: "map" },
                 { view: "History", title: "Trip History", icon: "time" },
                 { view: "Payments", title: "Payments & Salary", icon: "card" },
@@ -1374,6 +1587,7 @@ const UnifiedDriverDashboard = ({ navigation }) => {
 
       {/* Content Views */}
       {currentView === "Dashboard" && renderDashboard()}
+      {currentView === "Availability" && renderAvailability()}
       {currentView === "Routes" && renderRoutes()}
       {currentView === "Payments" && renderPayments()}
       {currentView === "History" && renderHistory()}
