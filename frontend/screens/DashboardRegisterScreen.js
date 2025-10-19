@@ -19,7 +19,7 @@ export default function DashboardRegisterScreen({ navigation }) {
     // Navigate based on selected role
     switch (role) {
       case "Driver":
-        navigation.navigate("DriverRegister");
+        navigation.navigate("DriverLogin");
         break;
       case "Transporter":
         navigation.navigate("TransporterRegister");

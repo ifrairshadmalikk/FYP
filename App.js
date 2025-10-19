@@ -42,9 +42,13 @@ import PassengerProfile from "./frontend/Transporter/PassengerProfile";
 import ProfileScreen from "./frontend/Transporter/ProfileScreen";
 import ViewResponces from "./frontend/Transporter/ViewResponces";
 
-// Driver
-import DriverDashboard from "./frontend/Driver/DriverDashboard";
-import DriverTrackingScreen from "./frontend/Driver/DriverTrackingScreen";
+// Driver Screens
+import DriverDashboardScreen from "./frontend/Driver/DriverDashboardScreen";
+import DriverAssignedRoutesScreen from "./frontend/Driver/DriverAssignedRoutesScreen";
+import DriverPaymentsScreen from "./frontend/Driver/DriverPaymentsScreen";
+import DriverTripHistoryScreen from "./frontend/Driver/DriverTripHistoryScreen";
+import DriverRegistrationScreen from "./frontend/Driver/DriverRegistrationScreen";
+import DriverLoginScreen from "./frontend/Driver/DriverLoginScreen";
 
 const Stack = createStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -70,6 +74,51 @@ function TransporterDrawer() {
     </Drawer.Navigator>
   );
 }
+
+function DriverDrawer() {
+  return (
+    <Drawer.Navigator
+      screenOptions={{
+        headerShown: false,
+        drawerType: "slide",
+        drawerStyle: {
+          backgroundColor: "#fff",
+          width: 240,
+        },
+        drawerActiveTintColor: "#FF6F00", // Primary color inline
+        drawerLabelStyle: { fontSize: 15, fontWeight: "600" },
+      }}
+    >
+      <Drawer.Screen
+        name="DriverDashboard"
+        component={DriverDashboardScreen}
+        options={{ title: "Dashboard" }}
+      />
+      <Drawer.Screen
+        name="DriverAssignedRoutes"
+        component={DriverAssignedRoutesScreen}
+        options={{ title: "Assigned Routes" }}
+      />
+     
+      <Drawer.Screen
+        name="DriverPayments"
+        component={DriverPaymentsScreen}
+        options={{ title: "Payments" }}
+      />
+      <Drawer.Screen
+        name="DriverTripHistory"
+        component={DriverTripHistoryScreen}
+        options={{ title: "Trip History" }}
+      />
+      <Drawer.Screen
+        name="DriverRegistration"
+        component={DriverRegistrationScreen}
+        options={{ title: "Registration" }}
+      />
+    </Drawer.Navigator>
+  );
+}
+
 
 export default function App() {
   return (
@@ -112,9 +161,11 @@ export default function App() {
         <Stack.Screen name="ViewResponse" component={ViewResponces} />
         
         {/* 🌟 Driver Flow */}
-        <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
-        <Stack.Screen name="VanTrackingdriver" component={DriverTrackingScreen} />
-        <Stack.Screen name="CreatePoll" component={CreateDailyPoll} />
+         <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
+
+        <Stack.Screen name="Driver" component={DriverDrawer} />
+
+        <Stack.Screen name="DriverRegistration" component={DriverRegistrationScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
