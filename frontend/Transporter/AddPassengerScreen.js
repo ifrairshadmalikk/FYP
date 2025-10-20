@@ -404,7 +404,7 @@ export default function PassengerList({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
-      {/* Stats Overview */}
+      {/* Stats Overview 
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{passengers.length}</Text>
@@ -425,7 +425,7 @@ export default function PassengerList({ navigation, route }) {
           <Text style={styles.statLabel}>Approved</Text>
         </View>
       </View>
-
+*/}
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
