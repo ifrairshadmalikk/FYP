@@ -207,7 +207,7 @@ export default function TransporterDashboard() {
                 { id: "3", label: "Assign Route", icon: "map-outline", nav: "AssignRoute", color: "#27AE60" },
                 { id: "4", label: "Live Tracking", icon: "location-outline", nav: "VanTracking", color: "#E74C3C" },
                 { id: "5", label: "Smart Scheduling", icon: "rocket-outline", nav: "SmartScheduling", color: "#F39C12" },
-                { id: "6", label: "Create Route", icon: "bus-outline", nav: "CreateRoute", color: "#8bbb6dff" },
+                { id: "", label: "", icon: "", nav: "", color: "#8bbb6dff" },
               ].map((action) => (
                 <TouchableOpacity
                   key={action.id}
@@ -227,8 +227,7 @@ export default function TransporterDashboard() {
           {/* Route Management */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Route Management</Text>
-              <Text style={styles.cardSubtitle}>Active routes & performance</Text>
+              <Text style={styles.cardTitle}>Active routes & performance</Text>
             </View>
             {routes.map((route) => (
               <TouchableOpacity

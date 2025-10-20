@@ -154,6 +154,7 @@ export default function App() {
         <Stack.Screen name="PassengerPerformance" component={PassengerPerformance} />
         <Stack.Screen name="CreateRoute" component={RouteAssignment} />
         <Stack.Screen name="SmartScheduling" component={SmartScheduling} />
+        <Stack.Screen name="CreatePoll" component={CreateDailyPoll} />
         <Stack.Screen name="AssignRoute" component={AssignRoutesScreen} />
         <Stack.Screen name="PassengerProfile" component={DriverProfile} />
         <Stack.Screen name="DriverProfile" component={DriverProfile} />
