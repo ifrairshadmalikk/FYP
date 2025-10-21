@@ -582,7 +582,7 @@ const UnifiedDriverDashboard = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Monthly Earnings Summary - FR-2.2.2.4 */}
+        {/* Monthly Earnings Summary - FR-2.2.2.4 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Monthly Earnings Summary</Text>
           <View style={{ alignItems: "center", paddingVertical: 20 }}>
@@ -593,7 +593,7 @@ const UnifiedDriverDashboard = ({ navigation }) => {
             <Text style={{ fontSize: 13, color: "#666", marginTop: 4 }}>October 2025</Text>
           </View>
         </View>
-
+*/}
         {/* Assigned Route Information - FR-2.4 */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Today's Assigned Route</Text>
@@ -648,7 +648,7 @@ const UnifiedDriverDashboard = ({ navigation }) => {
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Ionicons name={item.icon} size={22} color="#A1D826" style={{ marginRight: 14 }} />
               <Text style={styles.menuCardText}>{item.title}</Text>
-            </View>
+            </View>                                               
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               {item.badge > 0 && (
                 <View style={{
