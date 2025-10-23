@@ -41,6 +41,7 @@ import DriverProfile from "./frontend/Transporter/DriverProfile";
 import PassengerProfile from "./frontend/Transporter/PassengerProfile";
 import ProfileScreen from "./frontend/Transporter/ProfileScreen";
 import ViewResponces from "./frontend/Transporter/ViewResponces";
+import PassengerDataList from "./frontend/Transporter/PassengerDataList";
 
 // Driver Screens
 import DriverDashboardScreen from "./frontend/Driver/DriverDashboardScreen";
@@ -160,6 +161,7 @@ export default function App() {
         <Stack.Screen name="DriverProfile" component={DriverProfile} />
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
         <Stack.Screen name="ViewResponse" component={ViewResponces} />
+        <Stack.Screen name="PassengerDataList" component={PassengerDataList} />
         
         {/* 🌟 Driver Flow */}
          <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />

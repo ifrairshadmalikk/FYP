@@ -22,7 +22,7 @@ export default function DashboardRegisterScreen({ navigation }) {
         navigation.navigate("DriverLogin");
         break;
       case "Transporter":
-        navigation.navigate("TransporterRegister");
+        navigation.navigate("TransporterLogin");
         break;
       case "Passenger":
         navigation.navigate("PassengerLoginScreen");
