@@ -1,9 +1,8 @@
 import "react-native-gesture-handler";
-import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createDrawerNavigator } from "@react-navigation/drawer";
-
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 // Screens
 import Onboarding from "./frontend/screens/Onboarding";
 import WelcomeScreen from "./frontend/screens/WelcomeScreen";
@@ -14,7 +13,7 @@ import DriverRegisterScreen from "./frontend/screens/DriverRegisterScreen";
 import TransporterRegisterScreen from "./frontend/screens/TransporterRegisterScreen";
 import PassengerTransporterSelectionScreen from "./frontend/screens/PassengerTransporterSelectionScreen";
 import TransporterLoginScreen from "./frontend/screens/TransporterLoginScreen";
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 // Passenger Screens
 import PassengerAppNavigation from "./frontend/Passenger/screens/PassengerAppNavigation";
 import PassengerLoginScreen from "./frontend/Passenger/screens/PassengerLoginScreen";
@@ -122,6 +121,54 @@ function DriverDrawer() {
 
 
 export default function App() {
+   const [isLoading, setIsLoading] = useState(true);
+  const [userToken, setUserToken] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+
+  useEffect(() => {
+    checkAuthentication();
+  }, []);
+
+  const checkAuthentication = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const profile = await AsyncStorage.getItem('transporter');
+      
+      if (token && profile) {
+        setUserToken(token);
+        setUserProfile(JSON.parse(profile));
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const authContext = {
+    signIn: async (token, transporter) => {
+      try {
+        await AsyncStorage.setItem('token', token);
+        await AsyncStorage.setItem('transporter', JSON.stringify(transporter));
+        setUserToken(token);
+        setUserProfile(transporter);
+      } catch (error) {
+        console.error('Sign in error:', error);
+      }
+    },
+    signOut: async () => {
+      try {
+        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('transporter');
+        setUserToken(null);
+        setUserProfile(null);
+      } catch (error) {
+        console.error('Sign out error:', error);
+      }
+    },
+    userToken,
+    userProfile,
+  };
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
