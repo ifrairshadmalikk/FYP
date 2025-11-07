@@ -1,25 +1,26 @@
+// DriverRegistrationScreen.js (Updated)
 import React, { useState } from "react";
 import { 
-  View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Image 
+  View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator 
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { authAPI } from "./apiService";
 
 const DriverRegistrationScreen = ({ navigation }) => {
-  const [step, setStep] = useState(1); // Step 1: Personal, 2: License, 3: Vehicle
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    fullName: "",
+    name: "",
     email: "",
+    password: "",
     phone: "",
-    cnicNumber: "",
     licenseNumber: "",
-    licenseFile: "",
-    cnicFile: "",
-    profilePic: "",
-    vehicleModel: "",
-    vehicleNumber: "",
     vehicleType: "",
-    vehicleYear: "",
-    vehicleOwnershipProof: ""
+    vehicleNumber: "",
+    capacity: "",
+    experience: "",
+    address: "",
+    profileImage: ""
   });
 
   const handleChange = (name, value) => setForm({ ...form, [name]: value });
@@ -39,34 +40,63 @@ const DriverRegistrationScreen = ({ navigation }) => {
     }
   };
 
-  const handleNext = () => {
-    // Step validations
-    if (step === 1) {
-      if (!form.fullName || !form.email || !form.phone) {
+  const validateStep = (currentStep) => {
+    if (currentStep === 1) {
+      if (!form.name || !form.email || !form.password || !form.phone) {
         Alert.alert("Validation Error", "Please fill all required personal details.");
-        return;
+        return false;
       }
-    } else if (step === 2) {
-      if (!form.licenseNumber || !form.licenseFile || !form.cnicFile) {
-        Alert.alert("Validation Error", "Please fill license number and upload files.");
-        return;
+      if (form.password.length < 6) {
+        Alert.alert("Validation Error", "Password must be at least 6 characters long.");
+        return false;
       }
-    } else if (step === 3) {
-      if (!form.vehicleModel || !form.vehicleNumber || !form.vehicleType || !form.vehicleYear || !form.vehicleOwnershipProof) {
-        Alert.alert("Validation Error", "Please fill all vehicle details and upload ownership proof.");
-        return;
+    } else if (currentStep === 2) {
+      if (!form.licenseNumber || !form.vehicleType || !form.vehicleNumber) {
+        Alert.alert("Validation Error", "Please fill all license and vehicle details.");
+        return false;
       }
     }
-    if (step < 3) setStep(step + 1);
-    else handleSubmit();
+    return true;
   };
 
-  const handleSubmit = () => {
-    Alert.alert(
-      "Registration Submitted",
-      "Your request is pending approval. You will be notified once approved."
-    );
-    navigation.navigate("DriverLogin");
+  const handleNext = () => {
+    if (!validateStep(step)) return;
+    
+    if (step < 2) {
+      setStep(step + 1);
+    } else {
+      handleSubmit();
+    }
+  };
+
+  const handleBack = () => {
+    if (step > 1) setStep(step - 1);
+  };
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    try {
+      const response = await authAPI.register(form);
+      
+      if (response.data.success) {
+        Alert.alert(
+          "Registration Successful",
+          "Your account has been created successfully! You can now login.",
+          [
+            {
+              text: "OK",
+              onPress: () => navigation.navigate("DriverLogin")
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      const errorMessage = error.response?.data?.message || "Registration failed. Please try again.";
+      Alert.alert("Registration Error", errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const styles = {
@@ -87,8 +117,16 @@ const DriverRegistrationScreen = ({ navigation }) => {
     uploadButton: { backgroundColor: "#fff", paddingVertical: 18, borderRadius: 16, alignItems: "center", marginBottom: 12, borderWidth: 2, borderColor: "#afd826", borderStyle: "dashed" },
     uploadButtonText: { color: "#afd826", fontWeight: "700", fontSize: 16 },
     uploadedImage: { width: 80, height: 80, borderRadius: 12, marginBottom: 12 },
+    buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+    backButton: { backgroundColor: "#6b7280", paddingVertical: 18, borderRadius: 16, alignItems: "center", flex: 1, marginRight: 10 },
+    backButtonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+    nextButton: { backgroundColor: "#afd826", paddingVertical: 18, borderRadius: 16, alignItems: "center", flex: 1, marginLeft: 10 },
+    nextButtonText: { color: "#fff", fontWeight: "800", fontSize: 16 },
     submitButton: { backgroundColor: "#afd826", paddingVertical: 18, borderRadius: 16, alignItems: "center", marginTop: 20, shadowColor: "#afd826", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
-    submitButtonText: { color: "#fff", fontWeight: "800", fontSize: 18 }
+    submitButtonText: { color: "#fff", fontWeight: "800", fontSize: 18 },
+    stepIndicator: { flexDirection: 'row', justifyContent: 'center', marginBottom: 20 },
+    step: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#d1d5db', marginHorizontal: 5 },
+    activeStep: { backgroundColor: '#afd826' }
   };
 
   return (
@@ -98,76 +136,142 @@ const DriverRegistrationScreen = ({ navigation }) => {
         <Text style={styles.headerSubtitle}>Join our driver network today</Text>
       </View>
 
+      <View style={styles.stepIndicator}>
+        <View style={[styles.step, step >= 1 && styles.activeStep]} />
+        <View style={[styles.step, step >= 2 && styles.activeStep]} />
+      </View>
+
       <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
         {step === 1 && (
           <>
             <Text style={styles.sectionTitle}>Personal Details</Text>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Full Name <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="John Doe" value={form.fullName} onChangeText={(text) => handleChange("fullName", text)} />
+              <TextInput 
+                style={styles.input} 
+                placeholder="John Doe" 
+                value={form.name} 
+                onChangeText={(text) => handleChange("name", text)} 
+              />
             </View>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email Address <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="john.doe@example.com" value={form.email} onChangeText={(text) => handleChange("email", text)} />
+              <TextInput 
+                style={styles.input} 
+                placeholder="john.doe@example.com" 
+                value={form.email} 
+                onChangeText={(text) => handleChange("email", text)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Password <Text style={styles.required}>*</Text></Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="••••••" 
+                value={form.password} 
+                onChangeText={(text) => handleChange("password", text)}
+                secureTextEntry
+              />
             </View>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Phone Number <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="+92 300 1234567" value={form.phone} onChangeText={(text) => handleChange("phone", text)} />
+              <TextInput 
+                style={styles.input} 
+                placeholder="+92 300 1234567" 
+                value={form.phone} 
+                onChangeText={(text) => handleChange("phone", text)}
+                keyboardType="phone-pad"
+              />
             </View>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Profile Picture</Text>
-              {form.profilePic && <Image source={{ uri: form.profilePic }} style={styles.uploadedImage} />}
-              <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage("profilePic")}>
-                <Text style={styles.uploadButtonText}>Upload Profile Picture</Text>
-              </TouchableOpacity>
+              <Text style={styles.label}>Address</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="Your complete address" 
+                value={form.address} 
+                onChangeText={(text) => handleChange("address", text)}
+                multiline
+              />
             </View>
           </>
         )}
 
         {step === 2 && (
           <>
-            <Text style={styles.sectionTitle}>License & CNIC Upload</Text>
+            <Text style={styles.sectionTitle}>Vehicle & License Information</Text>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Driving License Number <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="ABC-123456" value={form.licenseNumber} onChangeText={(text) => handleChange("licenseNumber", text)} />
-            </View>
-            <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage("licenseFile")}>
-              <Text style={styles.uploadButtonText}>{form.licenseFile ? "✓ License Uploaded" : "📄 Upload License"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage("cnicFile")}>
-              <Text style={styles.uploadButtonText}>{form.cnicFile ? "✓ CNIC Uploaded" : "📄 Upload CNIC"}</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <Text style={styles.sectionTitle}>Vehicle Information</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Vehicle Model <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="Honda Civic 2020" value={form.vehicleModel} onChangeText={(text) => handleChange("vehicleModel", text)} />
-            </View>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Vehicle Registration Number <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="ABC-123" value={form.vehicleNumber} onChangeText={(text) => handleChange("vehicleNumber", text)} />
+              <Text style={styles.label}>License Number <Text style={styles.required}>*</Text></Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="ABC-123456" 
+                value={form.licenseNumber} 
+                onChangeText={(text) => handleChange("licenseNumber", text)} 
+              />
             </View>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Vehicle Type <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="Car/Van/Bus" value={form.vehicleType} onChangeText={(text) => handleChange("vehicleType", text)} />
+              <TextInput 
+                style={styles.input} 
+                placeholder="Car/Van/Bus" 
+                value={form.vehicleType} 
+                onChangeText={(text) => handleChange("vehicleType", text)} 
+              />
             </View>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Vehicle Year <Text style={styles.required}>*</Text></Text>
-              <TextInput style={styles.input} placeholder="2020" value={form.vehicleYear} onChangeText={(text) => handleChange("vehicleYear", text)} />
+              <Text style={styles.label}>Vehicle Number <Text style={styles.required}>*</Text></Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="ABC-123" 
+                value={form.vehicleNumber} 
+                onChangeText={(text) => handleChange("vehicleNumber", text)} 
+              />
             </View>
-            <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage("vehicleOwnershipProof")}>
-              <Text style={styles.uploadButtonText}>{form.vehicleOwnershipProof ? "✓ Ownership Proof Uploaded" : "📄 Upload Ownership Proof"}</Text>
-            </TouchableOpacity>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Capacity</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="8" 
+                value={form.capacity} 
+                onChangeText={(text) => handleChange("capacity", text)}
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Experience</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="5 years" 
+                value={form.experience} 
+                onChangeText={(text) => handleChange("experience", text)} 
+              />
+            </View>
           </>
         )}
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleNext}>
-          <Text style={styles.submitButtonText}>{step < 3 ? "Next →" : "Submit Registration"}</Text>
-        </TouchableOpacity>
+        {step === 1 ? (
+          <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+            <Text style={styles.nextButtonText}>Next →</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <Text style={styles.backButtonText}>← Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.submitButton, loading && { opacity: 0.7 }]} 
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit Registration</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );

@@ -1,24 +1,75 @@
-import React, { useState } from "react";
+// DriverLoginScreen.js
+import React, { useState, useEffect } from "react";
 import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  Alert 
+  View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator 
 } from "react-native";
+import { authAPI, setAuthToken, getAuthToken } from './apiService';
 
 const DriverLoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [checkingLogin, setCheckingLogin] = useState(true);
 
-  const handleLogin = () => {
+  // Check if user is already logged in
+  useEffect(() => {
+    checkExistingLogin();
+  }, []);
+
+  const checkExistingLogin = async () => {
+    try {
+      const token = await getAuthToken();
+      if (token) {
+        navigation.replace("DriverDashboard");
+      }
+    } catch (error) {
+      console.error('Error checking existing login:', error);
+    } finally {
+      setCheckingLogin(false);
+    }
+  };
+
+  const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Error", "Please enter both email and password.");
       return;
     }
-    Alert.alert("Success", "Logged in successfully!");
-    navigation.navigate("Driver");
+
+    if (!email.includes('@')) {
+      Alert.alert("Error", "Please enter a valid email address.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authAPI.login(email, password);
+      
+      if (response.data.success) {
+        await setAuthToken(response.data.token);
+
+// navigate into nested drawer and open its DriverDashboard screen
+navigation.navigate('Driver', {
+  screen: 'DriverDashboard',
+  params: { driver: response.data.driver },
+});
+        Alert.alert("Success", "Logged in successfully!");
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      let errorMessage = "Login failed. Please try again.";
+      
+      if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
+        errorMessage = "Network error. Please check your connection and server URL.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Login Error", errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const styles = {
@@ -143,8 +194,23 @@ const DriverLoginScreen = ({ navigation }) => {
       color: "#9ca3af",
       fontSize: 14,
       fontWeight: "500"
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#f8f9fa'
     }
   };
+
+  if (checkingLogin) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#afd826" />
+        <Text style={{ marginTop: 16, color: '#6b7280' }}>Checking login status...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -170,6 +236,7 @@ const DriverLoginScreen = ({ navigation }) => {
             keyboardType="email-address"
             autoCapitalize="none"
             style={styles.input}
+            editable={!loading}
           />
         </View>
 
@@ -183,13 +250,15 @@ const DriverLoginScreen = ({ navigation }) => {
             onChangeText={setPassword}
             secureTextEntry
             style={styles.input}
+            editable={!loading}
           />
         </View>
 
         {/* Forgot Password */}
         <TouchableOpacity 
           style={styles.forgotPassword}
-          onPress={() => Alert.alert("Forgot Password", "Password recovery flow.")}
+          onPress={() => Alert.alert("Forgot Password", "Password recovery feature will be implemented soon.")}
+          disabled={loading}
         >
           <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
         </TouchableOpacity>
@@ -197,22 +266,23 @@ const DriverLoginScreen = ({ navigation }) => {
         {/* Login Button */}
         <TouchableOpacity
           onPress={handleLogin}
-          style={styles.loginButton}
+          style={[styles.loginButton, loading && { opacity: 0.7 }]}
+          disabled={loading}
         >
-          <Text style={styles.loginButtonText}>Login →</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.loginButtonText}>Login →</Text>
+          )}
         </TouchableOpacity>
-
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.dividerLine} />
-        </View>
 
         {/* Sign Up */}
         <View style={styles.signupContainer}>
           <Text style={styles.signupText}>Don't have an account?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("DriverRegistration")}>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate("DriverRegistration")}
+            disabled={loading}
+          >
             <Text style={styles.signupLink}>Register</Text>
           </TouchableOpacity>
         </View>

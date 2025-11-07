@@ -7,15 +7,20 @@ import {
   TouchableOpacity, 
   ScrollView, 
   Alert,
-  Image 
+  Image ,
+   ActivityIndicator 
 } from "react-native";
+
+
+const API_BASE_URL = 'http://192.168.0.109:3000/api';
 
 export default function TransporterLoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) {
       setErrorMsg("Email and password are required.");
       return;
@@ -27,22 +32,67 @@ export default function TransporterLoginScreen({ navigation }) {
       return;
     }
 
-    // Test credentials
-    if (email === "d@test.com" && password === "Test@1234") {
-      setErrorMsg("");
-      Alert.alert("Success", "Login successful!");
-      navigation.navigate("TransporterDashboard");
-    } else {
-      setErrorMsg("Invalid email or password. Please try again.");
+    setLoading(true);
+    setErrorMsg("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/transporter/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.toLowerCase(),
+          password: password
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Save token to AsyncStorage
+        // await AsyncStorage.setItem('authToken', data.token);
+        // await AsyncStorage.setItem('transporter', JSON.stringify(data.transporter));
+        
+        Alert.alert("Success", data.message);
+        navigation.navigate("TransporterDashboard");
+      } else {
+        setErrorMsg(data.message);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setErrorMsg("Network error. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleForgotPassword = () => {
-    Alert.alert(
-      "Forgot Password",
-      "Password recovery link will be sent to your registered email."
-    );
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert("Email Required", "Please enter your email address first.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/transporter/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.toLowerCase() }),
+      });
+
+      const data = await response.json();
+      Alert.alert(data.success ? "Success" : "Error", data.message);
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      Alert.alert("Error", "Failed to send reset link. Please try again.");
+    }
   };
+
+ 
+
+// ... (styles remain the same)
 
   const styles = {
     container: { 
@@ -191,6 +241,7 @@ export default function TransporterLoginScreen({ navigation }) {
     }
   };
 
+  
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -266,8 +317,13 @@ export default function TransporterLoginScreen({ navigation }) {
         <TouchableOpacity
           onPress={handleLogin}
           style={styles.loginButton}
+          disabled={loading}
         >
-          <Text style={styles.loginButtonText}>Login →</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.loginButtonText}>Login →</Text>
+          )}
         </TouchableOpacity>
 
         {/* Divider */}
