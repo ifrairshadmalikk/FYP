@@ -8,7 +8,7 @@ import Onboarding from "./frontend/screens/Onboarding";
 import WelcomeScreen from "./frontend/screens/WelcomeScreen";
 import LoginScreen from "./frontend/screens/LoginScreen";
 import DashboardRegisterScreen from "./frontend/screens/DashboardRegisterScreen";
-import PassengerRegisterScreen from "./frontend/screens/PassengerRegisterScreen";
+
 import DriverRegisterScreen from "./frontend/screens/DriverRegisterScreen";
 import TransporterRegisterScreen from "./frontend/screens/TransporterRegisterScreen";
 import PassengerTransporterSelectionScreen from "./frontend/screens/PassengerTransporterSelectionScreen";
@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import PassengerAppNavigation from "./frontend/Passenger/screens/PassengerAppNavigation";
 import PassengerLoginScreen from "./frontend/Passenger/screens/PassengerLoginScreen";
 import PassengerDashboard from "./frontend/Passenger/screens/PassengerDashboard";
-
+import  PassengerRegistrationScreen  from "./frontend/Passenger/screens/PassengerRegistrationScreen";
 
 
 // Transporter Screens
@@ -179,7 +179,7 @@ export default function App() {
 
         {/* 🌟 Registration Flow */}
         <Stack.Screen name="DashboardRegister" component={DashboardRegisterScreen} />
-        <Stack.Screen name="PassengerRegister" component={PassengerRegisterScreen} />
+      
         <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
         <Stack.Screen name="TransporterRegister" component={TransporterRegisterScreen} />
         <Stack.Screen name="TransporterLogin" component={TransporterLoginScreen} />
@@ -209,7 +209,7 @@ export default function App() {
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
         <Stack.Screen name="ViewResponse" component={ViewResponces} />
         <Stack.Screen name="PassengerDataList" component={PassengerDataList} />
-        
+        <Stack.Screen name="PassengerRegistrationScreen" component={PassengerRegistrationScreen} />
         {/* 🌟 Driver Flow */}
          <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
 

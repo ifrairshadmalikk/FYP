@@ -1,5 +1,5 @@
-// PassengerLoginScreen.js
-import React, { useState } from "react";
+// PassengerLoginScreen.js 
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,17 +8,22 @@ import {
   Image,
   Alert,
   ScrollView,
-  Modal,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PassengerLoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [inviteLink, setInviteLink] = useState("");
-  const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingLogin, setCheckingLogin] = useState(true);
 
-  // ✅ Handle Login
+  // Check if user is already logged in
+  useEffect(() => {
+    checkExistingLogin();
+  }, []);
+
+  // PassengerLoginScreen.js 
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Error", "Please enter both email and password");
@@ -31,304 +36,318 @@ export default function PassengerLoginScreen({ navigation }) {
 
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await fetch('http://192.168.0.109:5001/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.toLowerCase(),
+          password: password
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Save token to async storage
+        await AsyncStorage.setItem('userToken', data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(data.passenger));
+        
+        Alert.alert("Success", "Login successful!");
+        navigation.navigate("PassengerAppNavigation");
+      } else {
+        Alert.alert("Error", data.message || "Login failed");
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert("Error", "Network error. Please try again.");
+    } finally {
       setLoading(false);
-      // For demo - always success
-      navigation.navigate("PassengerAppNavigation");
-    }, 1500);
-  };
-
-  // ✅ Handle Invite Link Login
-  const handleInviteLinkLogin = () => {
-    if (!inviteLink) {
-      Alert.alert("Error", "Please enter invite link");
-      return;
-    }
-
-    if (inviteLink.startsWith("https://raahi.com/invite/passenger/")) {
-      Alert.alert("Success", "Login successful with invite link!");
-      setInviteModalVisible(false);
-      setInviteLink("");
-      navigation.navigate("PassengerAppNavigation", { token: inviteLink });
-    } else {
-      Alert.alert("Invalid Link", "Please enter a valid invite link");
     }
   };
 
-  // ✅ Navigate back to Request Screen
-  const handleNavigateToRequest = () => {
-    navigation.navigate("PassengerRequestScreen");
+  // checkExistingLogin 
+  const checkExistingLogin = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        const response = await fetch('http://192.168.0.109:5001/api/auth/check', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          navigation.navigate("PassengerAppNavigation");
+        } else {
+          await AsyncStorage.removeItem('userToken');
+          await AsyncStorage.removeItem('userData');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking existing login:', error);
+    } finally {
+      setCheckingLogin(false);
+    }
   };
+
+  // ✅ Handle Forgot Password
+  const handleForgotPassword = () => {
+    Alert.alert(
+      "Forgot Password",
+      "Password recovery feature will be implemented soon. Please contact support if you need immediate assistance.",
+      [{ text: "OK" }]
+    );
+  };
+
+  const styles = {
+    container: { 
+      flex: 1, 
+      backgroundColor: "#f8f9fa" 
+    },
+    header: { 
+      paddingTop: 80,
+      paddingBottom: 60,
+      paddingHorizontal: 24,
+      backgroundColor: "#afd826",
+      borderBottomLeftRadius: 30, 
+      borderBottomRightRadius: 30,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 8,
+      marginBottom: 40
+    },
+    headerTitle: { 
+      color: "#fff", 
+      fontSize: 32, 
+      fontWeight: "800",
+      letterSpacing: 0.5,
+      textAlign: "center"
+    },
+    headerSubtitle: {
+      color: "#f0f9d8",
+      fontSize: 16,
+      marginTop: 8,
+      fontWeight: "500",
+      textAlign: "center"
+    },
+    logoContainer: {
+      alignItems: "center", 
+      marginBottom: 10
+    },
+    logo: {
+      width: 100,
+      height: 100,
+      backgroundColor: "#fff",
+      borderRadius: 50,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 3,
+      borderColor: "#afd826",
+      shadowColor: "#000",
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    logoImage: {
+      width: 60, 
+      height: 60
+    },
+    appName: {
+      fontSize: 26,
+      fontWeight: "bold",
+      color: "#afd826",
+      marginTop: 15,
+    },
+    appSubtitle: {
+       color: "#f0f9d8",
+      fontSize: 16,
+      marginTop: 8,
+      fontWeight: "500",
+      textAlign: "center"
+    },
+    formContainer: { 
+      paddingHorizontal: 24
+    },
+    label: { 
+      fontWeight: "600", 
+      color: "#374151", 
+      marginBottom: 8,
+      fontSize: 14,
+      letterSpacing: 0.2
+    },
+    inputContainer: { 
+      backgroundColor: "#fff", 
+      borderRadius: 16, 
+      paddingHorizontal: 18, 
+      paddingVertical: 16, 
+      marginBottom: 16, 
+      shadowColor: "#000", 
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06, 
+      shadowRadius: 8, 
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: "#f3f4f6"
+    },
+    input: { 
+      fontSize: 16, 
+      color: "#111827"
+    },
+    forgotPassword: {
+      alignSelf: "flex-end",
+      marginBottom: 24,
+      marginTop: -8
+    },
+    forgotPasswordText: {
+      color: "#afd826",
+      fontWeight: "600",
+      fontSize: 14
+    },
+    loginButton: { 
+      backgroundColor: "#afd826", 
+      paddingVertical: 18, 
+      borderRadius: 16, 
+      alignItems: "center", 
+      marginBottom: 24,
+      shadowColor: "#afd826",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 6
+    },
+    loginButtonText: { 
+      color: "#fff", 
+      fontWeight: "800", 
+      fontSize: 18,
+      letterSpacing: 0.5
+    },
+    registerContainer: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 8,
+      marginBottom: 40
+    },
+    registerText: {
+      color: "#6b7280",
+      fontSize: 15,
+      fontWeight: "500"
+    },
+    registerLink: {
+      color: "#afd826",
+      fontWeight: "700",
+      fontSize: 15,
+      marginLeft: 4
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#f8f9fa'
+    }
+  };
+
+  if (checkingLogin) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#afd826" />
+        <Text style={{ marginTop: 16, color: '#6b7280' }}>Checking login status...</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView
-      contentContainerStyle={{
-        flexGrow: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
-        backgroundColor: "#F9FAFB",
-      }}
-    >
-      {/* ✅ Logo */}
-      <View style={{ alignItems: "center", marginBottom: 30 }}>
-        <View
-          style={{
-            width: 100,
-            height: 100,
-            backgroundColor: "#fff",
-            borderRadius: 50,
-            justifyContent: "center",
-            alignItems: "center",
-            borderWidth: 3,
-            borderColor: "#afd826",
-            shadowColor: "#000",
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 5,
-          }}
-        >
-          <Image
-            source={{
-              uri: "https://cdn.prod.website-files.com/6846c2be8f3d7d1f31b5c7e3/6846e5d971c7bbaa7308cb70_img.webp",
-            }}
-            style={{ width: 60, height: 60 }}
-            resizeMode="contain"
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <Image
+              source={{
+                uri: "https://cdn.prod.website-files.com/6846c2be8f3d7d1f31b5c7e3/6846e5d971c7bbaa7308cb70_img.webp",
+              }}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={styles.appSubtitle}>Welcome Back</Text>
+        </View>
+      </View>
+
+      <ScrollView 
+        style={styles.formContainer} 
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Email */}
+        <Text style={styles.label}>Email Address</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Enter your email"
+            placeholderTextColor="#9ca3af"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={styles.input}
+            editable={!loading}
           />
         </View>
 
-        <Text
-          style={{
-            fontSize: 26,
-            fontWeight: "bold",
-            color: "#afd826",
-            marginTop: 15,
-          }}
-        >
-          RAAHI
-        </Text>
-        <Text style={{ color: "#555", fontSize: 14 }}>
-          Passenger Login
-        </Text>
-      </View>
+        {/* Password */}
+        <Text style={styles.label}>Password</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Enter your password"
+            placeholderTextColor="#9ca3af"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            style={styles.input}
+            editable={!loading}
+          />
+        </View>
 
-      {/* ✅ Login Card */}
-      <View
-        style={{
-          width: "100%",
-          backgroundColor: "#fff",
-          borderRadius: 16,
-          padding: 20,
-          shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowRadius: 6,
-          elevation: 4,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 20,
-            fontWeight: "700",
-            textAlign: "center",
-            marginBottom: 5,
-          }}
-        >
-          Welcome Back
-        </Text>
-        <Text
-          style={{
-            textAlign: "center",
-            color: "#666",
-            marginBottom: 20,
-            fontSize: 14,
-          }}
-        >
-          Login to your account
-        </Text>
-
-        {/* ✅ Email */}
-        <TextInput
-          style={styles.input}
-          placeholder="Email Address"
-          placeholderTextColor="#999"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        {/* ✅ Password */}
-        <TextInput
-          style={[styles.input, { marginTop: 15 }]}
-          placeholder="Password"
-          placeholderTextColor="#999"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        {/* ✅ Login Button */}
+        {/* Forgot Password */}
         <TouchableOpacity 
-          style={[styles.primaryBtn, { marginTop: 20 }]}
-          onPress={handleLogin}
+          style={styles.forgotPassword}
+          onPress={handleForgotPassword}
           disabled={loading}
         >
-          <Text style={styles.primaryBtnText}>
-            {loading ? "Logging in..." : "Login to Dashboard"}
-          </Text>
+          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
         </TouchableOpacity>
 
-        {/* ✅ Divider */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginVertical: 15,
-          }}
-        >
-          <View style={{ flex: 1, height: 1, backgroundColor: "#090909ff" }} />
-          <Text style={{ marginHorizontal: 10, color: "#000000ff" }}>or</Text>
-          <View style={{ flex: 1, height: 1, backgroundColor: "#000000ff" }} />
-        </View>
-
-        {/* ✅ Invite Link Login */}
+        {/* Login Button */}
         <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={() => setInviteModalVisible(true)}
+          onPress={handleLogin}
+          style={[styles.loginButton, loading && { opacity: 0.7 }]}
+          disabled={loading}
         >
-          <Text style={styles.secondaryBtnText}>Login with Invite Link</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.loginButtonText}>Login →</Text>
+          )}
         </TouchableOpacity>
 
-        {/* ✅ Register Link - FIXED NAVIGATION */}
-        <TouchableOpacity
-          style={[styles.registerBtn, { marginTop: 10 }]}
-          onPress={handleNavigateToRequest}
-        >
-          <Text style={styles.registerBtnText}>
-            Don't have an account? Send Request
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ✅ Invite Link Modal */}
-      <Modal visible={inviteModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Login with Invite Link</Text>
-            <Text style={styles.modalDesc}>
-              Enter the invite link received from your transporter
-            </Text>
-
-            <TextInput
-              style={[styles.input, { marginTop: 10 }]}
-              placeholder="https://raahi.com/invite/passenger/..."
-              value={inviteLink}
-              onChangeText={setInviteLink}
-              autoCapitalize="none"
-            />
-
-            <TouchableOpacity
-              style={[styles.primaryBtn, { marginTop: 20 }]}
-              onPress={handleInviteLinkLogin}
-            >
-              <Text style={styles.primaryBtnText}>Login with Link</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.cancelBtn, { marginTop: 10 }]}
-              onPress={() => setInviteModalVisible(false)}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Register Link */}
+        <View style={styles.registerContainer}>
+          <Text style={styles.registerText}>Don't have an account?</Text>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate("PassengerRegistrationScreen")}
+            disabled={loading}
+          >
+            <Text style={styles.registerLink}>Register</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
-
-const styles = {
-  input: {
-    width: "100%",
-    height: 48,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    fontSize: 15,
-    color: "#333",
-    backgroundColor: "#F5F5F5",
-  },
-  primaryBtn: {
-    backgroundColor: "#afd826",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  secondaryBtn: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  secondaryBtnText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#666",
-  },
-  registerBtn: {
-    borderWidth: 2,
-    borderColor: "#afd826",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  registerBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#afd826",
-  },
-  cancelBtn: {
-    backgroundColor: "#d9534f",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  cancelBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  modalBox: {
-    width: "85%",
-    backgroundColor: "#fff",
-    borderRadius: 15,
-    padding: 20,
-    elevation: 6,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
-    textAlign: "center",
-  },
-  modalDesc: {
-    color: "#555",
-    fontSize: 14,
-    textAlign: "center",
-    marginVertical: 10,
-  },
-};

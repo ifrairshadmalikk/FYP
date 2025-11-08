@@ -119,7 +119,47 @@ export default StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
+  // AlertStyle.js میں یہ نئے styles شامل کریں
 
+loadingContainer: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#f8f9fa'
+},
+loadingText: {
+  marginTop: 12,
+  fontSize: 16,
+  color: '#6c757d'
+},
+alertsHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  paddingHorizontal: 20,
+  paddingVertical: 10,
+  backgroundColor: '#fff',
+  borderBottomWidth: 1,
+  borderBottomColor: '#e9ecef'
+},
+refreshButton: {
+  padding: 8,
+  borderRadius: 20,
+  backgroundColor: '#f8f9fa'
+},
+createSampleButton: {
+  marginTop: 16,
+  paddingHorizontal: 20,
+  paddingVertical: 10,
+  backgroundColor: '#A1D826',
+  borderRadius: 8
+},
+createSampleText: {
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: 14
+}
+,
   // Alerts Count
   alertsCount: {
     paddingHorizontal: 20,
