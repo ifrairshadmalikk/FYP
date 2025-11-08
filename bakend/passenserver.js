@@ -89,54 +89,6 @@ passengerSchema.methods.comparePassword = async function(candidatePassword) {
 
 const Passenger = mongoose.model('Passenger', passengerSchema);
 
-// Alert Schema
-const alertSchema = new mongoose.Schema({
-  passengerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Passenger',
-    required: true
-  },
-  title: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  message: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  type: {
-    type: String,
-    enum: ['urgent', 'warning', 'success', 'info'],
-    default: 'info'
-  },
-  category: {
-    type: String,
-    enum: ['travel', 'payment', 'ride', 'system', 'driver', 'route'],
-    default: 'system'
-  },
-  icon: {
-    type: String,
-    default: 'notifications'
-  },
-  actionRequired: {
-    type: Boolean,
-    default: false
-  },
-  read: {
-    type: Boolean,
-    default: false
-  },
-  metadata: {
-    type: Object,
-    default: {}
-  }
-}, {
-  timestamps: true
-});
-
-const Alert = mongoose.model('Alert', alertSchema);
 
 // JWT Token Generator
 const generateToken = (userId) => {
@@ -412,65 +364,104 @@ app.put('/api/passenger/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ ALERTS ROUTES
+// Alert Schema (پہلے سے موجود ہے، صرف تصدیق کریں)
+const alertSchema = new mongoose.Schema({
+  passengerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Passenger',
+    required: true
+  },
+  title: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  message: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  type: {
+    type: String,
+    enum: ['urgent', 'warning', 'success', 'info'],
+    default: 'info'
+  },
+  category: {
+    type: String,
+    enum: ['travel', 'payment', 'ride', 'system', 'driver', 'route'],
+    default: 'system'
+  },
+  icon: {
+    type: String,
+    default: 'notifications'
+  },
+  actionRequired: {
+    type: Boolean,
+    default: false
+  },
+  read: {
+    type: Boolean,
+    default: false
+  },
+  metadata: {
+    type: Object,
+    default: {}
+  }
+}, {
+  timestamps: true
+});
+
+const Alert = mongoose.model('Alert', alertSchema);
 
 // ✅ Get Alerts for Passenger
 app.get('/api/alerts', authMiddleware, async (req, res) => {
   try {
-    const { category, limit = 50 } = req.query;
+    const { category, page = 1, limit = 20 } = req.query;
     
     let query = { passengerId: req.passenger._id };
     
+    // Filter by category if provided
     if (category && category !== 'all') {
       query.category = category;
     }
 
     const alerts = await Alert.find(query)
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .lean();
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
 
-    // Format dates for frontend
-    const formattedAlerts = alerts.map(alert => {
-      const now = new Date();
-      const alertDate = new Date(alert.createdAt);
-      const diffTime = Math.abs(now - alertDate);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      let dateDisplay = '';
-      if (diffDays === 1) {
-        dateDisplay = 'Today';
-      } else if (diffDays === 2) {
-        dateDisplay = 'Yesterday';
-      } else if (diffDays <= 7) {
-        dateDisplay = `${diffDays - 1} days ago`;
-      } else {
-        dateDisplay = alertDate.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric'
-        });
-      }
-
-      const timeDisplay = alertDate.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      });
-
-      return {
-        ...alert,
-        id: alert._id.toString(),
-        date: dateDisplay,
-        time: timeDisplay
-      };
+    // Get counts for different alert types
+    const totalAlerts = await Alert.countDocuments({ passengerId: req.passenger._id });
+    const unreadCount = await Alert.countDocuments({ 
+      passengerId: req.passenger._id, 
+      read: false 
+    });
+    const actionRequiredCount = await Alert.countDocuments({ 
+      passengerId: req.passenger._id, 
+      actionRequired: true,
+      read: false 
     });
 
     res.json({
       success: true,
-      alerts: formattedAlerts,
-      total: formattedAlerts.length,
-      unreadCount: formattedAlerts.filter(alert => !alert.read).length
+      alerts: alerts.map(alert => ({
+        id: alert._id,
+        title: alert.title,
+        message: alert.message,
+        type: alert.type,
+        category: alert.category,
+        icon: alert.icon,
+        actionRequired: alert.actionRequired,
+        read: alert.read,
+        time: formatTime(alert.createdAt),
+        date: formatDate(alert.createdAt),
+        metadata: alert.metadata
+      })),
+      counts: {
+        total: totalAlerts,
+        unread: unreadCount,
+        actionRequired: actionRequiredCount
+      }
     });
 
   } catch (error) {
@@ -537,149 +528,250 @@ app.put('/api/alerts/mark-all-read', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ Create Sample Alerts (Optional - for testing)
-app.post('/api/alerts/sample', authMiddleware, async (req, res) => {
+// ✅ Create Alert (ٹرانسپورٹر/ڈرائیور کے لیے)
+app.post('/api/alerts', authMiddleware, async (req, res) => {
   try {
-    const sampleAlerts = [
-      {
-        passengerId: req.passenger._id,
-        title: 'Travel Confirmation Required',
-        message: 'Please confirm your travel plans for tomorrow morning by 8:00 PM today',
-        type: 'urgent',
-        category: 'travel',
-        icon: 'warning',
-        actionRequired: true,
-        metadata: { tripId: '12345' }
-      },
-      {
-        passengerId: req.passenger._id,
-        title: 'Van Arriving Soon',
-        message: 'Your van is 5 minutes away from your pickup location. Please be ready.',
-        type: 'info',
-        category: 'ride',
-        icon: 'bus',
-        actionRequired: false,
-        metadata: { driverId: '67890', eta: '5 minutes' }
-      },
-      {
-        passengerId: req.passenger._id,
-        title: 'Subscription Renewal Due',
-        message: 'Your monthly subscription plan needs renewal to continue using our services without interruption.',
-        type: 'warning',
-        category: 'payment',
-        icon: 'card',
-        actionRequired: true,
-        metadata: { dueDate: '2024-01-20' }
-      }
-    ];
+    const { 
+      passengerId, 
+      title, 
+      message, 
+      type = 'info', 
+      category = 'system', 
+      actionRequired = false,
+      metadata = {} 
+    } = req.body;
 
-    await Alert.insertMany(sampleAlerts);
-
-    res.json({
-      success: true,
-      message: 'Sample alerts created successfully'
-    });
-
-  } catch (error) {
-    console.error('Create sample alerts error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error creating sample alerts'
-    });
-  }
-});
-
-// ✅ Delete Alert
-app.delete('/api/alerts/:alertId', authMiddleware, async (req, res) => {
-  try {
-    const { alertId } = req.params;
-
-    const alert = await Alert.findOneAndDelete({
-      _id: alertId,
-      passengerId: req.passenger._id
-    });
-
-    if (!alert) {
-      return res.status(404).json({
+    // Validation
+    if (!title || !message) {
+      return res.status(400).json({
         success: false,
-        message: 'Alert not found'
+        message: 'Title and message are required'
       });
     }
 
-    res.json({
+    const alert = new Alert({
+      passengerId: passengerId || req.passenger._id,
+      title,
+      message,
+      type,
+      category,
+      actionRequired,
+      metadata
+    });
+
+    await alert.save();
+
+    res.status(201).json({
       success: true,
-      message: 'Alert deleted successfully'
+      message: 'Alert created successfully',
+      alert
     });
 
   } catch (error) {
-    console.error('Delete alert error:', error);
+    console.error('Create alert error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error deleting alert'
+      message: 'Error creating alert'
     });
   }
 });
 
-// ✅ Get Alert Statistics
-app.get('/api/alerts/stats', authMiddleware, async (req, res) => {
-  try {
-    const stats = await Alert.aggregate([
-      { $match: { passengerId: req.passenger._id } },
-      {
-        $group: {
-          _id: '$category',
-          count: { $sum: 1 },
-          unread: {
-            $sum: { $cond: [{ $eq: ['$read', false] }, 1, 0] }
-          }
-        }
-      }
-    ]);
+// Helper functions for date formatting
+const formatTime = (date) => {
+  const now = new Date();
+  const alertDate = new Date(date);
+  const diffInHours = (now - alertDate) / (1000 * 60 * 60);
 
-    const totalAlerts = await Alert.countDocuments({ passengerId: req.passenger._id });
-    const unreadCount = await Alert.countDocuments({ 
-      passengerId: req.passenger._id, 
-      read: false 
+  if (diffInHours < 24) {
+    return alertDate.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
     });
-    const actionRequiredCount = await Alert.countDocuments({ 
-      passengerId: req.passenger._id, 
-      actionRequired: true,
-      read: false 
-    });
-
-    res.json({
-      success: true,
-      stats: {
-        total: totalAlerts,
-        unread: unreadCount,
-        actionRequired: actionRequiredCount,
-        byCategory: stats
-      }
-    });
-
-  } catch (error) {
-    console.error('Get alert stats error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching alert statistics'
-    });
+  } else if (diffInHours < 48) {
+    return 'Yesterday';
+  } else {
+    return `${Math.floor(diffInHours / 24)} days ago`;
   }
-});
+};
 
-// Serve React Native app static files
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+const formatDate = (date) => {
+  const alertDate = new Date(date);
+  const now = new Date();
+  
+  if (alertDate.toDateString() === now.toDateString()) {
+    return 'Today';
+  }
+  
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (alertDate.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
+  }
+  
+  return alertDate.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
 
-// Health check
+// ✅ Health Check Endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    success: true, 
-    message: 'Passenger App Server is running', 
-    timestamp: new Date().toISOString(),
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  res.json({
+    success: true,
+    message: 'Passenger App Server is running',
+    timestamp: new Date().toISOString()
   });
 });
+
+
+let notifications = [
+  {
+    id: '1',
+    title: 'Payment Successful 💰',
+    message: 'Your monthly subscription payment of Rs. 10,000 has been processed successfully.',
+    type: 'success',
+    category: 'payment',
+    icon: 'checkmark-circle',
+    read: false,
+    time: '2 hours ago'
+  },
+  {
+    id: '2', 
+    title: 'Trip Scheduled 🚗',
+    message: 'Your van trip for tomorrow at 8:00 AM has been confirmed with driver Ali Ahmed.',
+    type: 'info',
+    category: 'trip',
+    icon: 'car',
+    read: false,
+    time: '1 day ago'
+  },
+  {
+    id: '3',
+    title: 'Driver Update 👨‍💼',
+    message: 'Your regular driver has been changed. New driver: Muhammad Hassan.',
+    type: 'warning', 
+    category: 'driver',
+    icon: 'person',
+    read: true,
+    time: '2 days ago'
+  },
+  {
+    id: '4',
+    title: 'Route Change 🗺️',
+    message: 'Due to road construction, your pickup location has been temporarily changed.',
+    type: 'warning',
+    category: 'route', 
+    icon: 'map',
+    read: false,
+    time: '3 days ago'
+  },
+  {
+    id: '5',
+    title: 'Welcome to VanPool! 🎉',
+    message: 'Thank you for choosing VanPool for your daily commute. We are excited to serve you.',
+    type: 'success',
+    category: 'system',
+    icon: 'heart',
+    read: true,
+    time: '1 week ago'
+  }
+];
+
+// ============ ROUTES ============
+
+// ✅ Health Check
+app.get('/api/health', (req, res) => {
+  console.log('✅ Health check called');
+  res.json({
+    success: true,
+    message: 'OPEN Notification Server is running!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ✅ Get Notifications (COMPLETELY OPEN - NO AUTH)
+app.get('/api/notifications', (req, res) => {
+  try {
+    const { category } = req.query;
+    
+    console.log('📨 Fetching notifications (open access)...');
+    
+    let filteredNotifications = notifications;
+    if (category && category !== 'all') {
+      filteredNotifications = notifications.filter(n => n.category === category);
+    }
+
+    console.log(`✅ Sending ${filteredNotifications.length} notifications`);
+
+    res.json({
+      success: true,
+      notifications: filteredNotifications,
+      counts: {
+        total: filteredNotifications.length,
+        unread: filteredNotifications.filter(n => !n.read).length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get notifications error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to load notifications'
+    });
+  }
+});
+
+// ✅ Mark Notification as Read (OPEN)
+app.put('/api/notifications/:notificationId/read', (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    const notificationIndex = notifications.findIndex(n => n.id === notificationId);
+    
+    if (notificationIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    notifications[notificationIndex].read = true;
+
+    res.json({
+      success: true,
+      message: 'Notification marked as read'
+    });
+
+  } catch (error) {
+    console.error('Mark notification read error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating notification'
+    });
+  }
+});
+
+// ✅ Mark All Notifications as Read (OPEN)
+app.put('/api/notifications/mark-all-read', (req, res) => {
+  try {
+    notifications = notifications.map(n => ({ ...n, read: true }));
+
+    res.json({
+      success: true,
+      message: 'All notifications marked as read'
+    });
+
+  } catch (error) {
+    console.error('Mark all notifications read error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating notifications'
+    });
+  }
+});
+
 
 const PORT = process.env.PORT || 5001;
 

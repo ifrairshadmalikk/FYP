@@ -6,82 +6,32 @@ import {
   ScrollView,
   Animated,
   FlatList,
+  Alert as RNAlert,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import styles from '../../styles/AlertStyle';
 
-export default function AlertsScreen({ navigation }) {
-  const [alerts, setAlerts] = useState([
-    {
-      id: 1,
-      title: 'Travel Confirmation Required',
-      message: 'Please confirm your travel plans for tomorrow morning by 8:00 PM today',
-      type: 'urgent',
-      time: '10:30 AM',
-      date: 'Today',
-      read: false,
-      icon: 'warning',
-      category: 'travel',
-      actionRequired: true,
-    },
-    {
-      id: 2,
-      title: 'Van Arriving Soon',
-      message: 'Your van is 5 minutes away from your pickup location. Please be ready.',
-      type: 'info',
-      time: '9:15 AM',
-      date: 'Today',
-      read: false,
-      icon: 'bus',
-      category: 'ride',
-      actionRequired: false,
-    },
-    {
-      id: 3,
-      title: 'Subscription Renewal Due',
-      message: 'Your monthly subscription plan needs renewal to continue using our services without interruption.',
-      type: 'warning',
-      time: 'Yesterday',
-      date: '2024-01-14',
-      read: true,
-      icon: 'card',
-      category: 'payment',
-      actionRequired: true,
-    },
-    {
-      id: 4,
-      title: 'Route Optimization',
-      message: 'Your route has been optimized for better travel experience due to traffic conditions',
-      type: 'info',
-      time: '2 days ago',
-      date: '2024-01-13',
-      read: true,
-      icon: 'navigate',
-      category: 'route',
-      actionRequired: false,
-    },
-    {
-      id: 5,
-      title: 'Driver Assigned',
-      message: 'Muhammad Hassan has been assigned as your driver for the upcoming trip',
-      type: 'success',
-      time: '3 days ago',
-      date: '2024-01-12',
-      read: true,
-      icon: 'person',
-      category: 'driver',
-      actionRequired: false,
-    },
-  ]);
+const API_BASE_URL = 'http://192.168.0.109:5001/api'; // اپنا سرور URL استعمال کریں
 
+export default function AlertsScreen({ navigation }) {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [counts, setCounts] = useState({
+    total: 0,
+    unread: 0,
+    actionRequired: 0
+  });
+
   const blinkAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
+  // Animation effects
   useEffect(() => {
-    // Blink animation for unread alerts
     Animated.loop(
       Animated.sequence([
         Animated.timing(blinkAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
@@ -89,7 +39,6 @@ export default function AlertsScreen({ navigation }) {
       ])
     ).start();
 
-    // Fade in and slide up animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -104,22 +53,125 @@ export default function AlertsScreen({ navigation }) {
     ]).start();
   }, []);
 
+  // Fetch alerts from backend
+  const fetchAlerts = async (category = selectedCategory) => {
+    try {
+      const token = await getAuthToken(); // اپنا token management function استعمال کریں
+      
+      let url = `${API_BASE_URL}/alerts`;
+      if (category !== 'all') {
+        url += `?category=${category}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setAlerts(data.alerts);
+        setCounts(data.counts);
+      } else {
+        RNAlert.alert('Error', data.message || 'Failed to fetch alerts');
+      }
+    } catch (error) {
+      console.error('Fetch alerts error:', error);
+      RNAlert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
+
+  // Category change effect
+  useEffect(() => {
+    if (!loading) {
+      fetchAlerts(selectedCategory);
+    }
+  }, [selectedCategory]);
+
   const categories = [
     { id: 'all', label: 'All Alerts', icon: 'notifications' },
     { id: 'travel', label: 'Travel', icon: 'car' },
     { id: 'payment', label: 'Payment', icon: 'card' },
     { id: 'ride', label: 'Ride Updates', icon: 'bus' },
+    { id: 'driver', label: 'Driver', icon: 'person' },
+    { id: 'route', label: 'Route', icon: 'navigate' },
     { id: 'system', label: 'System', icon: 'settings' },
   ];
 
-  const markAsRead = (id) => {
-    setAlerts(alerts.map(alert => 
-      alert.id === id ? { ...alert, read: true } : alert
-    ));
+  const markAsRead = async (id) => {
+    try {
+      const token = await getAuthToken();
+      
+      const response = await fetch(`${API_BASE_URL}/alerts/${id}/read`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update local state
+        setAlerts(alerts.map(alert => 
+          alert.id === id ? { ...alert, read: true } : alert
+        ));
+        // Refresh counts
+        fetchAlerts();
+      } else {
+        RNAlert.alert('Error', data.message || 'Failed to mark as read');
+      }
+    } catch (error) {
+      console.error('Mark as read error:', error);
+      RNAlert.alert('Error', 'Network error. Please try again.');
+    }
   };
 
-  const markAllAsRead = () => {
-    setAlerts(alerts.map(alert => ({ ...alert, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      const token = await getAuthToken();
+      
+      const response = await fetch(`${API_BASE_URL}/alerts/mark-all-read`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update all alerts to read
+        setAlerts(alerts.map(alert => ({ ...alert, read: true })));
+        // Refresh counts
+        fetchAlerts();
+        RNAlert.alert('Success', 'All alerts marked as read');
+      } else {
+        RNAlert.alert('Error', data.message || 'Failed to mark all as read');
+      }
+    } catch (error) {
+      console.error('Mark all as read error:', error);
+      RNAlert.alert('Error', 'Network error. Please try again.');
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAlerts();
   };
 
   const getAlertColor = (type) => {
@@ -140,13 +192,6 @@ export default function AlertsScreen({ navigation }) {
       case 'info': return 'information-circle';
       default: return 'notifications';
     }
-  };
-
-  const getFilteredAlerts = () => {
-    if (selectedCategory === 'all') {
-      return alerts;
-    }
-    return alerts.filter(alert => alert.category === selectedCategory);
   };
 
   const renderCategoryTab = ({ item }) => (
@@ -188,7 +233,7 @@ export default function AlertsScreen({ navigation }) {
             colors={getAlertColor(item.type)}
             style={styles.alertIcon}
           >
-            <Icon name={getAlertIcon(item.type)} size={20} color="#fff" />
+            <Icon name={item.icon || getAlertIcon(item.type)} size={20} color="#fff" />
           </LinearGradient>
           <View style={styles.alertTitleContainer}>
             <Text style={styles.alertTitle}>{item.title}</Text>
@@ -251,9 +296,7 @@ export default function AlertsScreen({ navigation }) {
     </Animated.View>
   );
 
-  const unreadCount = alerts.filter(alert => !alert.read).length;
-  const filteredAlerts = getFilteredAlerts();
-  const actionRequiredCount = alerts.filter(alert => alert.actionRequired && !alert.read).length;
+  const filteredAlerts = alerts; // اب فیلٹرنگ بیک اینڈ میں ہو رہی ہے
 
   return (
     <View style={styles.container}>
@@ -270,9 +313,9 @@ export default function AlertsScreen({ navigation }) {
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Alerts & Notifications</Text>
-          {unreadCount > 0 && (
+          {counts.unread > 0 && (
             <View style={styles.unreadCountBadge}>
-              <Text style={styles.unreadCountText}>{unreadCount}</Text>
+              <Text style={styles.unreadCountText}>{counts.unread}</Text>
             </View>
           )}
         </View>
@@ -285,11 +328,11 @@ export default function AlertsScreen({ navigation }) {
       </LinearGradient>
 
       {/* Action Required Banner */}
-      {actionRequiredCount > 0 && (
+      {counts.actionRequired > 0 && (
         <View style={styles.actionBanner}>
           <Icon name="warning" size={20} color="#FFA726" />
           <Text style={styles.actionBannerText}>
-            {actionRequiredCount} alert{actionRequiredCount !== 1 ? 's' : ''} require your attention
+            {counts.actionRequired} alert{counts.actionRequired !== 1 ? 's' : ''} require your attention
           </Text>
         </View>
       )}
@@ -309,9 +352,12 @@ export default function AlertsScreen({ navigation }) {
       {/* Alerts Count */}
       <View style={styles.alertsCount}>
         <Text style={styles.countText}>
-          {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? 's' : ''}
+          {counts.total} alert{counts.total !== 1 ? 's' : ''}
           {selectedCategory !== 'all' && ` in ${categories.find(cat => cat.id === selectedCategory)?.label}`}
         </Text>
+        <TouchableOpacity onPress={() => setRefreshing(true)}>
+          <Icon name="refresh" size={16} color="#7f8c8d" />
+        </TouchableOpacity>
       </View>
 
       {/* Alerts List */}
@@ -321,14 +367,26 @@ export default function AlertsScreen({ navigation }) {
         keyExtractor={item => item.id.toString()}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#A1D826']}
+            tintColor={'#A1D826'}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Icon name="notifications-off" size={64} color="#e9ecef" />
-            <Text style={styles.emptyStateTitle}>No Alerts</Text>
+            <Text style={styles.emptyStateTitle}>
+              {loading ? 'Loading...' : 'No Alerts'}
+            </Text>
             <Text style={styles.emptyStateText}>
-              {selectedCategory === 'all' 
-                ? "You're all caught up!" 
-                : `No ${categories.find(cat => cat.id === selectedCategory)?.label?.toLowerCase()} alerts`
+              {loading 
+                ? 'Fetching your alerts...' 
+                : selectedCategory === 'all' 
+                  ? "You're all caught up!" 
+                  : `No ${categories.find(cat => cat.id === selectedCategory)?.label?.toLowerCase()} alerts`
               }
             </Text>
           </View>
@@ -336,7 +394,7 @@ export default function AlertsScreen({ navigation }) {
       />
 
       {/* Mark All as Read FAB */}
-      {unreadCount > 0 && (
+      {counts.unread > 0 && (
         <TouchableOpacity 
           style={styles.fab}
           onPress={markAllAsRead}
@@ -353,3 +411,9 @@ export default function AlertsScreen({ navigation }) {
     </View>
   );
 }
+
+// Helper function to get auth token (اپنے token storage کے مطابق اپ ڈیٹ کریں)
+const getAuthToken = async () => {
+  
+  return 'your-auth-token-here';
+};

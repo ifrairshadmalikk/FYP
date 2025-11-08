@@ -10,23 +10,29 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  RefreshControl
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import MapView, { Marker } from "react-native-maps";
 import styles from "../../styles/PassengerDashboardStyle";
 import { LinearGradient } from 'expo-linear-gradient';
 
+const API_BASE_URL = "http://localhost:5001/api";
+
 export default function PassengerDashboard({ navigation }) {
   const [showTravelAlert, setShowTravelAlert] = useState(true);
   const [showArrivalAlert, setShowArrivalAlert] = useState(true);
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [chatModalVisible, setChatModalVisible] = useState(false);
-  const [chatMessages, setChatMessages] = useState([
-    { id: 1, text: "Hello, I'm your driver!", fromDriver: true, time: "7:15 AM" },
-    { id: 2, text: "Hi! When will you arrive?", fromDriver: false, time: "7:16 AM" },
-  ]);
+  const [chatMessages, setChatMessages] = useState([]);
   const [inputText, setInputText] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [passengerData, setPassengerData] = useState(null);
 
+  // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const blinkAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
@@ -39,6 +45,7 @@ export default function PassengerDashboard({ navigation }) {
   const arrivalAlertPulseAnim = useRef(new Animated.Value(1)).current;
   const flatListRef = useRef(null);
 
+  // Sample data
   const nextTrip = {
     startTime: "7:30 AM",
     route: "DHA Phase 5 → Saddar",
@@ -53,6 +60,148 @@ export default function PassengerDashboard({ navigation }) {
     vehicleModel: "Toyota Hiace 2022",
     totalTrips: 1250,
     phone: "+92 300 1234567",
+  };
+
+  // API Functions
+  const fetchNotifications = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setNotifications(data.notifications);
+        setUnreadCount(data.counts.unread);
+      }
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  const fetchAlerts = async () => {
+    try {
+      const token = await getAuthToken(); // Implement your token retrieval
+      const response = await fetch(`${API_BASE_URL}/alerts`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        // Process alerts data
+        console.log("Alerts loaded:", data.alerts);
+      }
+    } catch (error) {
+      console.error("Error fetching alerts:", error);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        fetchNotifications(); // Refresh notifications
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        fetchNotifications(); // Refresh notifications
+      }
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+    }
+  };
+
+  const sendChatMessage = async (message) => {
+    try {
+      // Simulate API call for chat
+      const newMsg = {
+        id: Date.now(),
+        text: message,
+        fromDriver: false,
+        time: new Date().toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+      };
+      
+      setChatMessages(prev => [...prev, newMsg]);
+      
+      // Simulate driver response
+      setTimeout(() => {
+        const driverMsg = {
+          id: Date.now() + 1,
+          text: "I'll be there in 5 minutes!",
+          fromDriver: true,
+          time: new Date().toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+        };
+        setChatMessages(prev => [...prev, driverMsg]);
+      }, 2000);
+      
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
+
+  const confirmTravel = async () => {
+    try {
+      // API call to confirm travel
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/travel/confirm`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          tripDate: new Date().toISOString().split('T')[0],
+          confirmed: true
+        })
+      });
+
+      if (response.ok) {
+        // Stop animations and hide alert
+        travelAlertPulseAnim.stopAnimation();
+        Animated.timing(travelAlertPulseAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+        
+        Animated.timing(travelAlertSlideAnim, {
+          toValue: -100,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => setShowTravelAlert(false));
+        
+        Alert.alert("Success", "Travel confirmed for tomorrow!");
+      }
+    } catch (error) {
+      console.error("Error confirming travel:", error);
+      Alert.alert("Error", "Failed to confirm travel");
+    }
   };
 
   // Enhanced Animations
@@ -85,7 +234,7 @@ export default function PassengerDashboard({ navigation }) {
       useNativeDriver: true,
     }).start();
 
-    // Alert pulse animations (continuous until dismissed)
+    // Alert pulse animations
     if (showTravelAlert) {
       Animated.loop(
         Animated.sequence([
@@ -127,6 +276,10 @@ export default function PassengerDashboard({ navigation }) {
         Animated.timing(mapMarkerAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
       ])
     ).start();
+
+    // Load initial data
+    fetchNotifications();
+    fetchAlerts();
   }, []);
 
   // Call ring animation
@@ -158,24 +311,7 @@ export default function PassengerDashboard({ navigation }) {
     outputRange: [1, 1.1],
   });
 
-  const confirmTravel = () => {
-    // Stop pulse animation first
-    travelAlertPulseAnim.stopAnimation();
-    Animated.timing(travelAlertPulseAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-    
-    Animated.timing(travelAlertSlideAnim, {
-      toValue: -100,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => setShowTravelAlert(false));
-  };
-
   const dismissTravelAlert = () => {
-    // Stop pulse animation first
     travelAlertPulseAnim.stopAnimation();
     Animated.timing(travelAlertPulseAnim, {
       toValue: 0,
@@ -191,7 +327,6 @@ export default function PassengerDashboard({ navigation }) {
   };
 
   const dismissArrivalAlert = () => {
-    // Stop pulse animation first
     arrivalAlertPulseAnim.stopAnimation();
     Animated.timing(arrivalAlertPulseAnim, {
       toValue: 0,
@@ -208,17 +343,7 @@ export default function PassengerDashboard({ navigation }) {
 
   const sendMessage = () => {
     if (inputText.trim()) {
-      const currentTime = new Date().toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-      const newMsg = {
-        id: chatMessages.length + 1,
-        text: inputText,
-        fromDriver: false,
-        time: currentTime,
-      };
-      setChatMessages([...chatMessages, newMsg]);
+      sendChatMessage(inputText);
       setInputText("");
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -227,7 +352,26 @@ export default function PassengerDashboard({ navigation }) {
   };
 
   const handleAlertNavigation = () => {
-    navigation.navigate('AlertScreen');
+    navigation.navigate('AlertScreen', { 
+      notifications,
+      onMarkAsRead: markNotificationAsRead,
+      onMarkAllAsRead: markAllNotificationsAsRead
+    });
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      fetchNotifications(),
+      fetchAlerts()
+    ]);
+    setRefreshing(false);
+  };
+
+  // Helper function to get auth token (implement based on your auth system)
+  const getAuthToken = async () => {
+    // Implement token retrieval from your auth context or storage
+    return "your-auth-token";
   };
 
   return (
@@ -248,8 +392,13 @@ export default function PassengerDashboard({ navigation }) {
           onPress={handleAlertNavigation} 
         >
           <Icon name="notifications" size={26} color="#fff" />
-          {(showTravelAlert || showArrivalAlert) && (
+          {(unreadCount > 0 || showTravelAlert || showArrivalAlert) && (
             <Animated.View style={[styles.blinkDot, { opacity: blinkOpacity }]} />
+          )}
+          {unreadCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.badgeText}>{unreadCount}</Text>
+            </View>
           )}
         </TouchableOpacity>
       </LinearGradient>
@@ -257,6 +406,14 @@ export default function PassengerDashboard({ navigation }) {
       <ScrollView 
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#A1D826']}
+            tintColor={'#A1D826'}
+          />
+        }
       >
         {/* Enhanced Alerts with Independent Animations */}
         {showTravelAlert && (
@@ -306,7 +463,7 @@ export default function PassengerDashboard({ navigation }) {
               { translateY: cardTranslateY },
               { scale: arrivalAlertPulseAnim }
             ],
-            marginTop: showTravelAlert ? 15 : 20 // Adjust spacing based on other alert
+            marginTop: showTravelAlert ? 15 : 20
           }}>
             <LinearGradient
               colors={['#FF6B6B', '#EE5A52']}
@@ -334,13 +491,12 @@ export default function PassengerDashboard({ navigation }) {
           </Animated.View>
         )}
 
-        {/* Today's Trip Details with Gradient Heading Only */}
+        {/* Today's Trip Details */}
         <Animated.View style={{ 
           transform: [{ translateY: cardTranslateY }],
-          marginTop: (!showTravelAlert && !showArrivalAlert) ? 20 : 15 // Adjust top margin based on alerts
+          marginTop: (!showTravelAlert && !showArrivalAlert) ? 20 : 15
         }}>
           <View style={styles.sectionCard}>
-            {/* Only heading has gradient background */}
             <LinearGradient
               colors={['#A1D826', '#8BC220']}
               start={{ x: 0, y: 0 }}
@@ -354,7 +510,6 @@ export default function PassengerDashboard({ navigation }) {
             </LinearGradient>
 
             <View style={styles.tripCardContainer}>
-              {/* Rest of the content remains white */}
               <View style={styles.tripCard}>
                 <Icon name="time" size={24} color="#A1D826" />
                 <View style={{ marginLeft: 10 }}>
@@ -388,7 +543,7 @@ export default function PassengerDashboard({ navigation }) {
               </View>
             </View>
 
-            {/* Map section - white background */}
+            {/* Map section */}
             <View style={styles.mapWrapper}>
               <MapView
                 style={styles.map}
@@ -414,20 +569,19 @@ export default function PassengerDashboard({ navigation }) {
                   </Animated.View>
                 </Marker>
               </MapView>
-             <View style={styles.mapNote}>
-  <Icon name="information-circle" size={18} color="#FFA726" />
-  <Text style={styles.noteText}>
-    Van arriving in {nextTrip.estimatedArrival}
-  </Text>
-</View>
+              <View style={styles.mapNote}>
+                <Icon name="information-circle" size={18} color="#FFA726" />
+                <Text style={styles.noteText}>
+                  Van arriving in {nextTrip.estimatedArrival}
+                </Text>
+              </View>
             </View>
           </View>
         </Animated.View>
 
-        {/* Your Driver with Gradient Heading Only */}
+        {/* Your Driver */}
         <Animated.View style={{ transform: [{ translateY: cardTranslateY }] }}>
           <View style={styles.sectionCard}>
-            {/* Only heading has gradient background */}
             <LinearGradient
               colors={['#A1D826', '#8BC220']}
               start={{ x: 0, y: 0 }}
@@ -440,7 +594,6 @@ export default function PassengerDashboard({ navigation }) {
               </View>
             </LinearGradient>
 
-            {/* Driver content - white background */}
             <View style={styles.driverBox}>
               <View style={styles.driverCircle}>
                 <Text style={styles.driverInitials}>MH</Text>
@@ -454,6 +607,59 @@ export default function PassengerDashboard({ navigation }) {
                 <Text style={styles.driverSub}>{driver.vehicleModel}</Text>
                 <Text style={styles.driverSub}>{driver.vehicleNumber}</Text>
               </View>
+              <View style={styles.driverActions}>
+                <TouchableOpacity 
+                  style={styles.actionBtn}
+                  onPress={() => setCallModalVisible(true)}
+                >
+                  <Icon name="call" size={20} color="#A1D826" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.actionBtn}
+                  onPress={() => setChatModalVisible(true)}
+                >
+                  <Icon name="chatbubble" size={20} color="#A1D826" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Quick Actions */}
+        <Animated.View style={{ transform: [{ translateY: cardTranslateY }] }}>
+          <View style={styles.sectionCard}>
+            <LinearGradient
+              colors={['#A1D826', '#8BC220']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.sectionHeaderGradient}
+            >
+              <View style={styles.sectionTitleContainer}>
+                <Icon name="flash" size={22} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.cardTitle}>Quick Actions</Text>
+              </View>
+            </LinearGradient>
+
+            <View style={styles.quickActions}>
+              <TouchableOpacity style={styles.quickActionBtn}>
+                <Icon name="location" size={24} color="#A1D826" />
+                <Text style={styles.quickActionText}>Track Van</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.quickActionBtn}>
+                <Icon name="document-text" size={24} color="#A1D826" />
+                <Text style={styles.quickActionText}>Trip History</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.quickActionBtn}>
+                <Icon name="card" size={24} color="#A1D826" />
+                <Text style={styles.quickActionText}>Payments</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.quickActionBtn}>
+                <Icon name="help-circle" size={24} color="#A1D826" />
+                <Text style={styles.quickActionText}>Support</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Animated.View>
@@ -555,6 +761,7 @@ export default function PassengerDashboard({ navigation }) {
                 placeholderTextColor="#999"
                 value={inputText}
                 onChangeText={setInputText}
+                onSubmitEditing={sendMessage}
               />
               <TouchableOpacity onPress={sendMessage}>
                 <LinearGradient

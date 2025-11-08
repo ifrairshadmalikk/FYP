@@ -3,81 +3,36 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   Animated,
   FlatList,
   RefreshControl,
+  Alert as RNAlert,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import styles from '../../styles/NotificationScreenStyle';
 
-export default function NotificationsScreen({ navigation }) {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'Trip Confirmed',
-      message: 'Your trip for tomorrow has been confirmed by the transporter',
-      time: '2 hours ago',
-      type: 'success',
-      read: false,
-      icon: 'checkmark-circle',
-      category: 'trip',
-    },
-    {
-      id: 2,
-      title: 'Subscription Renewed',
-      message: 'Your monthly subscription has been renewed successfully. You can continue using our services.',
-      time: '5 hours ago',
-      type: 'payment',
-      read: false,
-      icon: 'card',
-      category: 'payment',
-    },
-    {
-      id: 3,
-      title: 'Driver Assigned',
-      message: 'Muhammad Hassan has been assigned as your driver for the upcoming trip',
-      time: '1 day ago',
-      type: 'info',
-      read: true,
-      icon: 'person',
-      category: 'driver',
-    },
-    {
-      id: 4,
-      title: 'Route Updated',
-      message: 'Your route has been optimized for better travel experience',
-      time: '2 days ago',
-      type: 'warning',
-      read: true,
-      icon: 'navigate',
-      category: 'route',
-    },
-    {
-      id: 5,
-      title: 'Payment Due Reminder',
-      message: 'Your monthly subscription payment is due in 3 days',
-      time: '3 days ago',
-      type: 'payment',
-      read: true,
-      icon: 'alert-circle',
-      category: 'payment',
-    },
-    {
-      id: 6,
-      title: 'Service Update',
-      message: 'New features added to improve your van pooling experience',
-      time: '1 week ago',
-      type: 'info',
-      read: true,
-      icon: 'megaphone',
-      category: 'system',
-    },
-  ]);
+const API_BASE_URL = 'http://192.168.0.109:5001/api';
 
+const categories = [
+  { id: 'all', label: 'All', icon: 'apps' },
+  { id: 'payment', label: 'Payments', icon: 'card' },
+  { id: 'trip', label: 'Trips', icon: 'car' },
+  { id: 'driver', label: 'Drivers', icon: 'person' },
+  { id: 'system', label: 'System', icon: 'settings' },
+];
+
+export default function NotificationsScreen({ navigation }) {
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [counts, setCounts] = useState({
+    total: 0,
+    unread: 0
+  });
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -94,34 +49,123 @@ export default function NotificationsScreen({ navigation }) {
         useNativeDriver: true,
       }),
     ]).start();
+
+    fetchNotifications();
   }, []);
 
-  const categories = [
-    { id: 'all', label: 'All', icon: 'apps' },
-    { id: 'payment', label: 'Payments', icon: 'card' },
-    { id: 'trip', label: 'Trips', icon: 'car' },
-    { id: 'driver', label: 'Drivers', icon: 'person' },
-    { id: 'system', label: 'System', icon: 'settings' },
-  ];
+  // Fetch notifications from backend (बिना token के)
+  const fetchNotifications = async (category = selectedCategory) => {
+    try {
+      let url = `${API_BASE_URL}/notifications`;
+      if (category !== 'all') {
+        url += `?category=${category}`;
+      }
+
+      console.log('📡 Fetching notifications from:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📊 Notifications response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setNotifications(data.notifications || []);
+        setCounts(data.counts || { total: 0, unread: 0 });
+        console.log(`✅ Loaded ${data.notifications?.length || 0} notifications`);
+      } else {
+        throw new Error(data.message || 'Failed to load notifications');
+      }
+
+    } catch (error) {
+      console.error('❌ Fetch notifications error:', error);
+      RNAlert.alert(
+        'Connection Error', 
+        'Please make sure server is running on http://192.168.0.109:5001'
+      );
+      setNotifications([]);
+      setCounts({ total: 0, unread: 0 });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Category change effect
+  useEffect(() => {
+    if (!loading) {
+      fetchNotifications(selectedCategory);
+    }
+  }, [selectedCategory]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 2000);
+    fetchNotifications();
   };
 
-  const markAsRead = (id) => {
-    setNotifications(notifications.map(notification => 
-      notification.id === id ? { ...notification, read: true } : notification
-    ));
+  const markAsRead = async (id) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update local state
+        setNotifications(notifications.map(notification => 
+          notification.id === id ? { ...notification, read: true } : notification
+        ));
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          unread: Math.max(0, prev.unread - 1)
+        }));
+      }
+    } catch (error) {
+      console.error('Mark as read error:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(notification => ({
-      ...notification,
-      read: true
-    })));
+  const markAllAsRead = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update all notifications to read
+        setNotifications(notifications.map(notification => ({ 
+          ...notification, 
+          read: true 
+        })));
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          unread: 0
+        }));
+        RNAlert.alert('Success', 'All notifications marked as read');
+      }
+    } catch (error) {
+      console.error('Mark all as read error:', error);
+    }
   };
 
   const getNotificationColor = (type) => {
@@ -130,19 +174,11 @@ export default function NotificationsScreen({ navigation }) {
       case 'payment': return ['#FFA726', '#FF9800'];
       case 'warning': return ['#FF6B6B', '#EE5A52'];
       case 'info': return ['#5AC8FA', '#4AB9F1'];
+      case 'trip': return ['#A1D826', '#8BC220'];
+      case 'driver': return ['#5AC8FA', '#4AB9F1'];
+      case 'system': return ['#FFA726', '#FF9800'];
       default: return ['#A1D826', '#8BC220'];
     }
-  };
-
-  const getUnreadCount = () => {
-    return notifications.filter(notification => !notification.read).length;
-  };
-
-  const getFilteredNotifications = () => {
-    if (selectedCategory === 'all') {
-      return notifications;
-    }
-    return notifications.filter(notification => notification.category === selectedCategory);
   };
 
   const renderCategoryTab = ({ item }) => (
@@ -216,8 +252,12 @@ export default function NotificationsScreen({ navigation }) {
     </Animated.View>
   );
 
-  const unreadCount = getUnreadCount();
-  const filteredNotifications = getFilteredNotifications();
+  const renderLoadingState = () => (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#A1D826" />
+      <Text style={styles.loadingText}>Loading notifications...</Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -234,9 +274,9 @@ export default function NotificationsScreen({ navigation }) {
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Notifications</Text>
-          {unreadCount > 0 && (
+          {counts.unread > 0 && (
             <View style={styles.unreadBadge}>
-              <Text style={styles.unreadCount}>{unreadCount}</Text>
+              <Text style={styles.unreadCount}>{counts.unread}</Text>
             </View>
           )}
         </View>
@@ -263,42 +303,47 @@ export default function NotificationsScreen({ navigation }) {
       {/* Notifications Count */}
       <View style={styles.notificationsCount}>
         <Text style={styles.countText}>
-          {filteredNotifications.length} notification{filteredNotifications.length !== 1 ? 's' : ''}
+          {counts.total} notification{counts.total !== 1 ? 's' : ''}
           {selectedCategory !== 'all' && ` in ${categories.find(cat => cat.id === selectedCategory)?.label}`}
         </Text>
+        <TouchableOpacity onPress={onRefresh}>
+          <Icon name="refresh" size={16} color="#7f8c8d" />
+        </TouchableOpacity>
       </View>
 
+      {/* Loading State */}
+      {loading && renderLoadingState()}
+
       {/* Notifications List */}
-      <FlatList
-        data={filteredNotifications}
-        renderItem={renderNotification}
-        keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#A1D826']}
-            tintColor="#A1D826"
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Icon name="notifications-off" size={64} color="#e9ecef" />
-            <Text style={styles.emptyStateTitle}>No Notifications</Text>
-            <Text style={styles.emptyStateText}>
-              {selectedCategory === 'all' 
-                ? "You're all caught up!" 
-                : `No ${categories.find(cat => cat.id === selectedCategory)?.label?.toLowerCase()} notifications`
-              }
-            </Text>
-          </View>
-        }
-      />
+      {!loading && (
+        <FlatList
+          data={notifications}
+          renderItem={renderNotification}
+          keyExtractor={item => item.id.toString()}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#A1D826']}
+              tintColor="#A1D826"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Icon name="notifications-off" size={64} color="#e9ecef" />
+              <Text style={styles.emptyStateTitle}>No Notifications</Text>
+              <Text style={styles.emptyStateText}>
+                No notifications found.
+              </Text>
+            </View>
+          }
+        />
+      )}
 
       {/* Mark All as Read FAB */}
-      {unreadCount > 0 && (
+      {!loading && counts.unread > 0 && (
         <TouchableOpacity 
           style={styles.fab}
           onPress={markAllAsRead}
