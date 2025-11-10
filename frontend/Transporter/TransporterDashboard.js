@@ -13,6 +13,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -91,7 +92,9 @@ const apiService = {
       throw error;
     }
   },
-
+async getTrips() {
+    return this.apiCall('/trips');
+  },
   async getToken() {
     try {
       return await AsyncStorage.getItem('authToken');
@@ -261,10 +264,28 @@ const apiService = {
     });
   },
 
-  // Trip APIs (Live Tracking)
-  async getTrips() {
-    return this.apiCall('/trips');
+ async getTrips() {
+    try {
+      const response = await this.apiCall('/trips');
+      console.log('Trips API Response:', response);
+      
+      // Handle different response formats
+      if (Array.isArray(response)) {
+        return response; // Direct array
+      } else if (response && Array.isArray(response.trips)) {
+        return response.trips; // { trips: [...] }
+      } else if (response && Array.isArray(response.data)) {
+        return response.data; // { data: [...] }
+      } else {
+        console.warn('Unexpected trips response format:', response);
+        return []; // Return empty array as fallback
+      }
+    } catch (error) {
+      console.error('Error in getTrips API:', error);
+      return []; // Return empty array on error
+    }
   },
+
 
   async updateTripLocation(tripId, locationData) {
     return this.apiCall(`/trips/${tripId}/location`, {
@@ -410,43 +431,60 @@ const TransporterDashboard = ()=> {
       setIsLoading(false);
     }
   };
-  const loadTrips = async () => {
+ // CORRECTED loadTrips function
+const loadTrips = async () => {
   try {
     const tripsData = await apiService.getTrips();
+    
+    console.log('🔍 Trips API Response:', JSON.stringify(tripsData, null, 2));
     
     // Handle case where tripsData might be an object instead of array
     const tripsArray = Array.isArray(tripsData) ? tripsData : 
                       (tripsData.trips || tripsData.data || []);
     
-    // Convert trips to vans format for compatibility
-    const vansData = tripsArray.map(trip => ({
-      id: trip._id || trip.id,
-      name: `Van ${trip.driverId?.name || 'Unknown'}`,
-      driver: trip.driverId?.name || 'Unknown Driver',
-      route: trip.routeId?.name || 'Unknown Route',
-      timeSlot: '07:00 AM',
-      status: trip.status,
-      passengers: trip.passengers?.length || 0,
-      capacity: 8,
-      currentStop: trip.currentStop,
-      stops: trip.routeId?.stops || [],
-      completedStops: trip.completedStops || [],
-      currentLocation: trip.currentLocation || { latitude: 33.6844, longitude: 73.0479 },
-      speed: trip.speed || 0,
-      eta: trip.eta || '0 min',
-      color: '#3498DB',
-      passengersList: trip.passengersList || [],
-      notifiedPickups: false,
-      notifiedComplete: false,
-    }));
+    console.log('📊 Processed trips array:', tripsArray.length);
+    
+    // Convert trips to vans format for your frontend
+    const vansData = tripsArray.map(trip => {
+      // Safely handle passengers array
+      const passengers = Array.isArray(trip.passengers) ? trip.passengers : [];
+      const pickedPassengers = passengers.filter(p => p && (p.status === 'picked' || p.status === 'current'));
+      
+      console.log(`🚐 Processing trip: ${trip.driverName}, Passengers: ${passengers.length}`);
+      
+      return {
+        id: trip._id, // MongoDB automatic ID
+        name: `Van ${trip.driverName || 'Unknown'}`,
+        driver: trip.driverName || 'Unknown Driver',
+        route: trip.routeName || 'Unknown Route',
+        timeSlot: trip.timeSlot || 'Not specified',
+        status: trip.status || 'Unknown',
+        passengers: pickedPassengers.length,
+        capacity: trip.capacity || 8,
+        currentStop: trip.currentStop || 'Not specified',
+        stops: Array.isArray(trip.stops) ? trip.stops : [],
+        completedStops: Array.isArray(trip.completedStops) ? trip.completedStops : [],
+        currentLocation: trip.currentLocation || { latitude: 33.6844, longitude: 73.0479 },
+        speed: trip.speed || 0,
+        eta: trip.eta || '0 min',
+        color: '#3498DB',
+        passengersList: passengers,
+        notifiedPickups: false,
+        notifiedComplete: false,
+        vehicle: trip.vehicleType || 'Unknown Vehicle',
+        vehicleNumber: trip.vehicleNumber || 'N/A'
+      };
+    });
+    
+    console.log('✅ Converted vans data:', vansData.length);
     setVans(vansData);
+    
   } catch (error) {
-    console.error('Error loading trips:', error);
+    console.error('❌ Error loading trips:', error);
     // Set empty array as fallback
     setVans([]);
   }
 };
-
   // Individual data loading functions
   const loadProfile = async () => {
     try {
@@ -474,7 +512,28 @@ const TransporterDashboard = ()=> {
       console.error('Error loading polls:', error);
     }
   };
+// Update these functions in your component
+const loadDriverRequests = async () => {
+  try {
+    // ✅ Only load pending requests
+    const requestsData = await apiService.getDriverRequests();
+    const pendingRequests = requestsData.data.filter(req => req.status === 'pending');
+    setDriverRequests(pendingRequests);
+  } catch (error) {
+    console.error('Error loading driver requests:', error);
+  }
+};
 
+const loadPassengerRequests = async () => {
+  try {
+    // ✅ Only load pending requests
+    const requestsData = await apiService.getPassengerRequests();
+    const pendingRequests = requestsData.filter(req => req.status === 'pending');
+    setPassengerRequests(pendingRequests);
+  } catch (error) {
+    console.error('Error loading passenger requests:', error);
+  }
+};
   const loadPassengers = async () => {
     try {
       const passengersData = await apiService.getPassengers();
@@ -502,23 +561,8 @@ const TransporterDashboard = ()=> {
     }
   };
 
-  const loadDriverRequests = async () => {
-    try {
-      const requestsData = await apiService.getDriverRequests();
-      setDriverRequests(requestsData);
-    } catch (error) {
-      console.error('Error loading driver requests:', error);
-    }
-  };
-
-  const loadPassengerRequests = async () => {
-    try {
-      const requestsData = await apiService.getPassengerRequests();
-      setPassengerRequests(requestsData);
-    } catch (error) {
-      console.error('Error loading passenger requests:', error);
-    }
-  };
+  
+  
 
   const loadDriverPayments = async () => {
     try {
@@ -2585,81 +2629,235 @@ const NotificationsSection = () => {
     </ScrollView>
   );
 };
+// Dashboard component के अंदर ही यह function add करें
 const LiveTrackingSection = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const mapRef = useRef(null);
   const [vanProgress, setVanProgress] = useState({});
+  const vanPositions = useRef({});
 
-  const VAN_COLOR = COLORS.primary;
-
-  const fitToRoute = useCallback((van) => {
-    if (mapRef.current && van) {
-      const coordinates = van.stops
-        ?.map((stop) => stopCoordinates[stop])
-        .filter((coord) => coord && coord.latitude && coord.longitude) || [];
-      
-      if (coordinates.length > 1) {
-        mapRef.current.fitToCoordinates(coordinates, {
-          edgePadding: { top: 120, right: 60, bottom: 60, left: 60 },
-          animated: true,
-        });
-      } else if (coordinates.length === 1) {
-        mapRef.current.animateToRegion(
-          {
-            latitude: coordinates[0].latitude,
-            longitude: coordinates[0].longitude,
-            latitudeDelta: 0.04,
-            longitudeDelta: 0.04,
-          },
-          800
-        );
+  // Ensure Animated.Values exist for each van
+  useEffect(() => {
+    vans.forEach((van) => {
+      if (!vanPositions.current[van.id]) {
+        vanPositions.current[van.id] = {
+          latitude: new Animated.Value(van.currentLocation?.latitude || 33.6844),
+          longitude: new Animated.Value(van.currentLocation?.longitude || 73.0479),
+          rotation: new Animated.Value(0),
+          scale: new Animated.Value(1),
+        };
       }
-    }
+    });
+
+    // Cleanup for removed vans
+    Object.keys(vanPositions.current).forEach((id) => {
+      if (!vans.find((v) => String(v.id) === String(id))) {
+        delete vanPositions.current[id];
+      }
+    });
+  }, [vans]);
+
+  const stopsToCoords = useCallback((stops = []) => {
+    return (stops || [])
+      .map((s) => stopCoordinates[s])
+      .filter((c) => c && typeof c.latitude === 'number' && typeof c.longitude === 'number');
   }, []);
 
-  // Animation effect remains similar but uses API data
-  useEffect(() => {
-    if (!isPlaying) return;
+  const fitToRoute = useCallback((van) => {
+    if (!mapRef.current || !van) return;
+    const coords = stopsToCoords(van.stops);
+    if (coords.length > 1) {
+      mapRef.current.fitToCoordinates(coords, {
+        edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
+    } else if (coords.length === 1) {
+      mapRef.current.animateToRegion(
+        {
+          latitude: coords[0].latitude,
+          longitude: coords[0].longitude,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        },
+        1000
+      );
+    }
+  }, [stopsToCoords]);
 
-    const interval = setInterval(async () => {
-      // Simulate van movement - in real app, you'd get updates from API
-      setVanProgress(prev => {
+  // Animation loop
+  useEffect(() => {
+    if (!isPlaying) {
+      // Reset animation for en-route vans
+      vans.forEach((van) => {
+        const pos = vanPositions.current[van.id];
+        if (pos && van.status === 'En Route') {
+          Animated.parallel([
+            Animated.timing(pos.scale, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.timing(pos.rotation, { toValue: 0, duration: 300, useNativeDriver: true }),
+          ]).start();
+        }
+      });
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setVanProgress((prev) => {
         const newProgress = { ...prev };
         const updatedVans = vans.map((van) => {
           if (van.status !== 'En Route') return van;
 
-          newProgress[van.id] = Math.min((prev[van.id] || 0) + 0.003, 0.99);
+          const prevVal = prev[van.id] || 0;
+          newProgress[van.id] = Math.min((prevVal + 0.005) % 1, 0.99);
 
-          // Update van position logic here...
-          // This would typically come from real GPS data
+          const stops = Array.isArray(van.stops) ? van.stops : [];
+          const totalSegments = Math.max(stops.length - 1, 1);
+          const segmentIndex = Math.floor(newProgress[van.id] * totalSegments);
+          const segmentProgress = (newProgress[van.id] * totalSegments) % 1;
 
-          return van;
+          if (segmentIndex >= totalSegments) {
+            // Mark as completed
+            const pos = vanPositions.current[van.id];
+            if (pos) {
+              Animated.sequence([
+                Animated.timing(pos.scale, { toValue: 1.3, duration: 300, useNativeDriver: true }),
+                Animated.timing(pos.scale, { toValue: 1, duration: 300, useNativeDriver: true }),
+              ]).start();
+            }
+
+            // Update stats
+            setStats((s) => ({ 
+              ...s, 
+              completedTrips: (s.completedTrips || 0) + 1, 
+              ongoingTrips: Math.max((s.ongoingTrips || 1) - 1, 0) 
+            }));
+
+            return {
+              ...van,
+              status: 'Completed',
+              eta: '0 min',
+              currentStop: van.stops ? van.stops[van.stops.length - 1] : van.currentStop,
+              completedStops: van.stops || van.completedStops || [],
+              currentLocation: (van.stops && stopCoordinates[van.stops[van.stops.length - 1]]) || van.currentLocation,
+              passengersList: (van.passengersList || []).map((p) => ({ 
+                ...p, 
+                status: 'picked', 
+                pickupTime: p.pickupTime || new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' }) 
+              })),
+            };
+          }
+
+          const startStop = stops[segmentIndex];
+          const endStop = stops[segmentIndex + 1];
+          const start = (startStop && stopCoordinates[startStop]) || van.currentLocation || { latitude: 33.6844, longitude: 73.0479 };
+          const end = (endStop && stopCoordinates[endStop]) || van.currentLocation || start;
+
+          const newLat = start.latitude + (end.latitude - start.latitude) * segmentProgress;
+          const newLng = start.longitude + (end.longitude - start.longitude) * segmentProgress;
+
+          const pos = vanPositions.current[van.id];
+          if (pos) {
+            Animated.parallel([
+              Animated.timing(pos.latitude, { toValue: newLat, duration: 100, useNativeDriver: false }),
+              Animated.timing(pos.longitude, { toValue: newLng, duration: 100, useNativeDriver: false }),
+              Animated.sequence([
+                Animated.timing(pos.scale, { toValue: 1.05, duration: 150, useNativeDriver: true }), 
+                Animated.timing(pos.scale, { toValue: 1, duration: 150, useNativeDriver: true })
+              ]),
+              Animated.timing(pos.rotation, { 
+                toValue: Math.atan2(end.longitude - start.longitude, end.latitude - start.latitude) * (180 / Math.PI), 
+                duration: 100, 
+                useNativeDriver: true 
+              }),
+            ]).start();
+          }
+
+          // Update passengers and completed stops
+          let updatedPassengers = Array.isArray(van.passengersList) ? van.passengersList : [];
+          let updatedCompletedStops = Array.isArray(van.completedStops) ? van.completedStops : [];
+          const nextStop = stops[segmentIndex] || van.currentStop;
+
+          const distance = Math.sqrt(Math.pow(newLat - start.latitude, 2) + Math.pow(newLng - start.longitude, 2));
+          if (distance < 0.0005 && startStop && !updatedCompletedStops.includes(startStop)) {
+            updatedCompletedStops = [...updatedCompletedStops, startStop];
+            updatedPassengers = updatedPassengers.map((p) => {
+              const passenger = passengerResponses.find((pr) => pr.name === p.name);
+              if (passenger && passenger.pickupPoint === startStop) {
+                return { 
+                  ...p, 
+                  status: 'picked', 
+                  pickupTime: new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' }) 
+                };
+              }
+              return p;
+            });
+            if (pos) {
+              Animated.sequence([
+                Animated.timing(pos.scale, { toValue: 1.4, duration: 200, useNativeDriver: true }), 
+                Animated.timing(pos.scale, { toValue: 1, duration: 200, useNativeDriver: true })
+              ]).start();
+            }
+          }
+
+          const remainingDistance = (1 - newProgress[van.id]) * 15;
+          const etaMinutes = Math.round((remainingDistance / 40) * 60);
+
+          return {
+            ...van,
+            currentLocation: { latitude: newLat, longitude: newLng },
+            currentStop: nextStop,
+            completedStops: updatedCompletedStops,
+            eta: `${etaMinutes} min`,
+            speed: 40,
+            passengersList: updatedPassengers,
+            passengers: updatedPassengers.filter((p) => p.status === 'picked').length,
+          };
         });
 
+        // Update vans state
         setVans(updatedVans);
+
+        // Center map on selected van
+        if (selectedVan && mapRef.current) {
+          const found = updatedVans.find((v) => v.id === selectedVan.id);
+          if (found && found.currentLocation) {
+            mapRef.current.animateToRegion(
+              { 
+                latitude: found.currentLocation.latitude, 
+                longitude: found.currentLocation.longitude, 
+                latitudeDelta: 0.02, 
+                longitudeDelta: 0.02 
+              },
+              500
+            );
+          }
+        }
+
         return newProgress;
       });
-    }, 80);
+    }, 100);
 
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, vans, selectedVan, passengerResponses]);
 
+  // Fit route when selected van changes
   useEffect(() => {
-    if (selectedVan) {
-      fitToRoute(selectedVan);
-    }
+    if (selectedVan) fitToRoute(selectedVan);
   }, [selectedVan, fitToRoute]);
 
   return (
     <ScrollView style={styles.section} showsVerticalScrollIndicator={false}>
       <Text style={styles.sectionTitle}>Live Driver Tracking</Text>
+      
       <View style={styles.controlPanel}>
         <TouchableOpacity
           style={[styles.controlButton, isPlaying ? styles.pauseButton : styles.playButton]}
-          onPress={() => setIsPlaying(!isPlaying)}
+          onPress={() => {
+            setIsPlaying(!isPlaying);
+            if (!isPlaying && selectedVan) fitToRoute(selectedVan);
+          }}
         >
           <Icon name={isPlaying ? "pause" : "play-arrow"} size={20} color={COLORS.white} />
-          <Text style={styles.controlButtonText}>{isPlaying ? "Pause" : "Play"} Simulation</Text>
+          <Text style={styles.controlButtonText}>{isPlaying ? "Pause" : "Start"} Simulation</Text>
         </TouchableOpacity>
         
         <Text style={styles.activeVansText}>
@@ -2672,7 +2870,8 @@ const LiveTrackingSection = () => {
           <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedVan(null)}>
             <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>
-          <View style={[styles.vanHeader, { backgroundColor: VAN_COLOR }]}>
+          
+          <View style={[styles.vanHeader, { backgroundColor: COLORS.primary }]}>
             <Text style={styles.vanDetailName}>
               {selectedVan.name} - {selectedVan.driver}
             </Text>
@@ -2681,7 +2880,6 @@ const LiveTrackingSection = () => {
             </Text>
           </View>
           
-          {/* Map and tracking details - similar to before but using API data */}
           <View style={styles.mapContainer}>
             <View style={styles.mapHeader}>
               <Text style={styles.mapSimulationTitle}>Live Location</Text>
@@ -2689,9 +2887,9 @@ const LiveTrackingSection = () => {
                 <Text style={styles.liveBadgeText}>LIVE</Text>
               </View>
             </View>
+            
             <MapView
               ref={mapRef}
-              provider={PROVIDER_GOOGLE}
               style={styles.map}
               initialRegion={{
                 latitude: selectedVan.currentLocation?.latitude || 33.6844,
@@ -2700,14 +2898,13 @@ const LiveTrackingSection = () => {
                 longitudeDelta: 0.04,
               }}
             >
-              {/* Map markers and polylines using API data */}
               <Marker
                 coordinate={selectedVan.currentLocation || { latitude: 33.6844, longitude: 73.0479 }}
                 title={selectedVan.name}
                 description={`${selectedVan.currentStop} | ETA: ${selectedVan.eta}`}
               >
-                <View style={[styles.vanMarker, { borderColor: VAN_COLOR }]}>
-                  <Icon name="directions-car" size={30} color={VAN_COLOR} />
+                <View style={[styles.vanMarker, { borderColor: COLORS.primary }]}>
+                  <Icon name="directions-car" size={30} color={COLORS.primary} />
                 </View>
               </Marker>
               
@@ -2729,7 +2926,6 @@ const LiveTrackingSection = () => {
             </MapView>
           </View>
 
-          {/* Van details using API data */}
           <View style={styles.vanInfoCard}>
             <Text style={styles.cardTitle}>Van Details</Text>
             <View style={styles.vanInfoRow}>
@@ -2751,13 +2947,12 @@ const LiveTrackingSection = () => {
               <Text style={styles.vanInfoValue}>{selectedVan.status}</Text>
             </View>
           </View>
-
         </View>
       ) : (
         <>
           <Text style={styles.selectVanText}>Select a van to track:</Text>
+          
           <MapView
-            provider={PROVIDER_GOOGLE}
             style={[styles.map, { height: 220, marginBottom: 18 }]}
             initialRegion={{
               latitude: 33.6,
@@ -2774,7 +2969,7 @@ const LiveTrackingSection = () => {
                 description={van.currentStop}
                 onPress={() => setSelectedVan(van)}
               >
-                <View style={[styles.vanMarker, { borderColor: VAN_COLOR }]}>
+                <View style={[styles.vanMarker, { borderColor: COLORS.primary }]}>
                   <Icon
                     name="directions-car"
                     size={24}
@@ -2791,7 +2986,7 @@ const LiveTrackingSection = () => {
           {vans.length > 0 ? vans.map((van) => (
             <TouchableOpacity
               key={van.id}
-              style={[styles.vanCard, { borderColor: VAN_COLOR }]}
+              style={[styles.vanCard, { borderColor: COLORS.primary }]}
               onPress={() => setSelectedVan(van)}
             >
               <View style={styles.vanHeader}>
@@ -2947,143 +3142,282 @@ const PassengerRequestsSection = () => (
     )}
   </ScrollView>
 );
-const PaymentsSection = () => (
-  <ScrollView style={styles.section}>
-    <Text style={styles.sectionTitle}>Payments Management</Text>
-    <View style={styles.tabContainer}>
-      <TouchableOpacity 
-        style={[styles.tab, paymentTab === 'driver' && styles.tabActive]} 
-        onPress={() => setPaymentTab('driver')}
-      >
-        <Text style={[styles.tabText, paymentTab === 'driver' && styles.tabTextActive]}>Driver Payments</Text>
-      </TouchableOpacity>
-      <TouchableOpacity 
-        style={[styles.tab, paymentTab === 'passenger' && styles.tabActive]} 
-        onPress={() => setPaymentTab('passenger')}
-      >
-        <Text style={styles.tabText}>Passenger Payments</Text>
-      </TouchableOpacity>
-    </View>
-    
-    {paymentTab === 'driver' && (
-      <>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Send Payment to Driver</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="Driver Name" 
-            value={newPayment.driver} 
-            onChangeText={text => setNewPayment({ ...newPayment, driver: text })} 
-          />
-          <TextInput 
-            style={styles.input} 
-            placeholder="Amount" 
-            value={newPayment.amount} 
-            onChangeText={text => setNewPayment({ ...newPayment, amount: text })} 
-            keyboardType="numeric" 
-          />
-          <TextInput 
-            style={styles.input} 
-            placeholder="Payment Mode" 
-            value={newPayment.mode} 
-            onChangeText={text => setNewPayment({ ...newPayment, mode: text })} 
-          />
-          <TouchableOpacity style={styles.primaryBtn} onPress={sendDriverPayment}>
-            <Text style={styles.primaryBtnText}>Send Payment</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <Text style={styles.sectionSubtitle}>Payment History</Text>
-        {driverPayments.length > 0 ? driverPayments.map(payment => (
-          <View key={payment._id} style={styles.passengerPaymentCard}>
-            <View style={styles.paymentHeader}>
-              <Text style={styles.passengerName}>
-                {typeof payment.driverId === 'object' ? payment.driverId.name : payment.driver}
-              </Text>
-              <View style={[
-                styles.passengerStatusBadge, 
-                payment.status === 'Confirmed' && styles.statusPaid,
-                payment.status === 'Pending' && styles.statusPending,
-                payment.status === 'Failed' && styles.statusExpired
-              ]}>
-                <Text style={styles.passengerStatusText}>{payment.status}</Text>
+const PaymentsSection = () => {
+  const [selectedDriver, setSelectedDriver] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState('Cash');
+  const [availableDrivers, setAvailableDrivers] = useState([]);
+
+  // Load available drivers
+  useEffect(() => {
+    loadAvailableDrivers();
+  }, []);
+
+  const loadAvailableDrivers = async () => {
+    try {
+      const response = await apiService.apiCall('/users?role=driver&status=active');
+      setAvailableDrivers(response.users || []);
+    } catch (error) {
+      console.error('Error loading drivers:', error);
+    }
+  };
+
+  const sendPaymentNotification = async () => {
+    if (!selectedDriver || !paymentAmount) {
+      Alert.alert('Error', 'Please select driver and enter amount');
+      return;
+    }
+
+    try {
+      const selectedDriverData = availableDrivers.find(d => d._id === selectedDriver);
+      
+      const notificationData = {
+        type: 'payment_sent',
+        title: 'Payment Sent',
+        message: `Transport company has sent you PKR ${paymentAmount} via ${paymentMode}`,
+        recipientId: selectedDriver,
+        recipientType: 'driver',
+        paymentData: {
+          amount: paymentAmount,
+          mode: paymentMode,
+          date: new Date().toISOString(),
+          status: 'sent'
+        }
+      };
+
+      // Send notification to driver
+      await apiService.apiCall('/notifications', {
+        method: 'POST',
+        body: JSON.stringify(notificationData),
+      });
+
+      // Save payment record (for transporter's records only)
+      const paymentRecord = {
+        driverId: selectedDriver,
+        driverName: selectedDriverData?.name || 'Unknown Driver',
+        amount: paymentAmount,
+        mode: paymentMode,
+        date: new Date().toISOString(),
+        status: 'sent',
+        type: 'driver_payment'
+      };
+
+      await apiService.apiCall('/payments', {
+        method: 'POST',
+        body: JSON.stringify(paymentRecord),
+      });
+
+      // Reset form
+      setSelectedDriver('');
+      setPaymentAmount('');
+      setPaymentMode('Cash');
+
+      Alert.alert('Success', `Payment notification sent to ${selectedDriverData?.name}`);
+      
+      // Reload payment history
+      loadDriverPayments();
+    } catch (error) {
+      console.error('Error sending payment:', error);
+      Alert.alert('Error', 'Failed to send payment notification');
+    }
+  };
+
+  return (
+    <ScrollView style={styles.section}>
+      <Text style={styles.sectionTitle}>Payments Management</Text>
+      
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tab, paymentTab === 'driver' && styles.tabActive]} 
+          onPress={() => setPaymentTab('driver')}
+        >
+          <Text style={[styles.tabText, paymentTab === 'driver' && styles.tabTextActive]}>
+            Driver Payments
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, paymentTab === 'passenger' && styles.tabActive]} 
+          onPress={() => setPaymentTab('passenger')}
+        >
+          <Text style={styles.tabText}>Passenger Payments</Text>
+        </TouchableOpacity>
+      </View>
+      
+      {paymentTab === 'driver' && (
+        <>
+          {/* Send Payment Notification Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Send Payment Notification</Text>
+            
+            {/* Driver Selection */}
+            <Text style={styles.inputLabel}>Select Driver:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedDriver}
+                style={styles.picker}
+                onValueChange={(itemValue) => setSelectedDriver(itemValue)}
+              >
+                <Picker.Item label="Choose a driver" value="" />
+                {availableDrivers.map(driver => (
+                  <Picker.Item 
+                    key={driver._id} 
+                    label={`${driver.name} - ${driver.phone || ''}`} 
+                    value={driver._id} 
+                  />
+                ))}
+              </Picker>
+            </View>
+
+            {/* Amount Input */}
+            <TextInput 
+              style={styles.input} 
+              placeholder="Amount (PKR)" 
+              value={paymentAmount} 
+              onChangeText={setPaymentAmount} 
+              keyboardType="numeric" 
+            />
+
+            {/* Payment Mode Selection */}
+            <Text style={styles.inputLabel}>Payment Method:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={paymentMode}
+                style={styles.picker}
+                onValueChange={(itemValue) => setPaymentMode(itemValue)}
+              >
+                <Picker.Item label="Cash" value="Cash" />
+                <Picker.Item label="Bank Transfer" value="Bank Transfer" />
+                <Picker.Item label="EasyPaisa" value="EasyPaisa" />
+                <Picker.Item label="JazzCash" value="JazzCash" />
+                <Picker.Item label="Other" value="Other" />
+              </Picker>
+            </View>
+
+            <TouchableOpacity 
+              style={[
+                styles.primaryBtn, 
+                (!selectedDriver || !paymentAmount) && styles.disabledBtn
+              ]} 
+              onPress={sendPaymentNotification}
+              disabled={!selectedDriver || !paymentAmount}
+            >
+              <Text style={styles.primaryBtnText}>Send Payment Notification</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Payment History */}
+          <Text style={styles.sectionSubtitle}>Payment History</Text>
+          {driverPayments.length > 0 ? driverPayments.map(payment => (
+            <View key={payment._id} style={styles.paymentHistoryCard}>
+              <View style={styles.paymentHeader}>
+                <Text style={styles.driverName}>
+                  {payment.driverName || 'Unknown Driver'}
+                </Text>
+                <View style={[styles.paymentStatusBadge, styles.statusSent]}>
+                  <Text style={styles.paymentStatusText}>Sent</Text>
+                </View>
+              </View>
+              
+              <View style={styles.paymentDetails}>
+                <View style={styles.paymentDetailRow}>
+                  <Text style={styles.paymentDetailLabel}>Amount:</Text>
+                  <Text style={styles.paymentDetailValue}>PKR {payment.amount}</Text>
+                </View>
+                
+                <View style={styles.paymentDetailRow}>
+                  <Text style={styles.paymentDetailLabel}>Method:</Text>
+                  <Text style={styles.paymentDetailValue}>{payment.mode}</Text>
+                </View>
+                
+                <View style={styles.paymentDetailRow}>
+                  <Text style={styles.paymentDetailLabel}>Date:</Text>
+                  <Text style={styles.paymentDetailValue}>
+                    {new Date(payment.date || payment.createdAt).toLocaleDateString('en-PK')}
+                  </Text>
+                </View>
+                
+                <View style={styles.paymentDetailRow}>
+                  <Text style={styles.paymentDetailLabel}>Time:</Text>
+                  <Text style={styles.paymentDetailValue}>
+                    {new Date(payment.date || payment.createdAt).toLocaleTimeString('en-PK')}
+                  </Text>
+                </View>
               </View>
             </View>
-            <Text style={styles.paymentDetail}>Amount: PKR {payment.amount}</Text>
-            <Text style={styles.paymentDetail}>Mode: {payment.mode}</Text>
-            <Text style={styles.paymentDetail}>Date: {new Date(payment.createdAt).toLocaleDateString()}</Text>
-            <Text style={styles.paymentDetail}>Month: {payment.month}</Text>
+          )) : (
+            <View style={styles.emptyState}>
+              <Icon name="receipt" size={48} color="#999" />
+              <Text style={styles.emptyText}>No payment history</Text>
+              <Text style={styles.emptySubtext}>Payment notifications will appear here</Text>
+            </View>
+          )}
+        </>
+      )}
+      
+      {paymentTab === 'passenger' && (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Passenger Payment Records</Text>
+            <Text style={styles.infoText}>
+              View passenger payment status and send renewal reminders
+            </Text>
           </View>
-        )) : (
-          <View style={styles.emptyState}>
-            <Icon name="account-balance-wallet" size={48} color="#999" />
-            <Text style={styles.emptyText}>No driver payments</Text>
-          </View>
-        )}
-      </>
-    )}
-    
-    {paymentTab === 'passenger' && (
-      <>
-        {passengerPayments.length > 0 ? passengerPayments.map(payment => (
-          <View key={payment._id} style={styles.passengerPaymentCard}>
-            <View style={styles.paymentHeader}>
-              <Text style={styles.passengerName}>
-                {typeof payment.passengerId === 'object' ? payment.passengerId.name : payment.passenger}
+          
+          {passengerPayments.length > 0 ? passengerPayments.map(payment => (
+            <View key={payment._id} style={styles.passengerPaymentCard}>
+              <View style={styles.paymentHeader}>
+                <Text style={styles.passengerName}>
+                  {typeof payment.passengerId === 'object' ? payment.passengerId.name : payment.passenger}
+                </Text>
+                <View style={[
+                  styles.passengerStatusBadge, 
+                  payment.status === 'Paid' && styles.statusPaid,
+                  payment.status === 'Pending' && styles.statusPending,
+                  payment.status === 'Expired' && styles.statusExpired
+                ]}>
+                  <Text style={styles.passengerStatusText}>{payment.status}</Text>
+                </View>
+              </View>
+              
+              <Text style={styles.paymentDetail}>Amount: PKR {payment.amount}</Text>
+              <Text style={styles.paymentDetail}>
+                Last Payment: {new Date(payment.lastPaymentDate).toLocaleDateString()}
               </Text>
-              <View style={[
-                styles.passengerStatusBadge, 
-                payment.status === 'Paid' && styles.statusPaid,
-                payment.status === 'Pending' && styles.statusPending,
-                payment.status === 'Expired' && styles.statusExpired
-              ]}>
-                <Text style={styles.passengerStatusText}>{payment.status}</Text>
+              <Text style={styles.paymentDetail}>
+                Expiry: {new Date(payment.expiryDate).toLocaleDateString()}
+              </Text>
+              
+              <View style={styles.passengerActions}>
+                {payment.status === 'Expired' && (
+                  <TouchableOpacity 
+                    style={styles.reminderBtn} 
+                    onPress={() => sendPaymentReminder(payment._id)}
+                  >
+                    <Text style={styles.reminderBtnText}>Send Reminder</Text>
+                  </TouchableOpacity>
+                )}
+                {payment.status === 'Paid' && (
+                  <TouchableOpacity 
+                    style={styles.renewalBtn} 
+                    onPress={() => sendRenewalNotification(payment._id)}
+                  >
+                    <Text style={styles.renewalBtnText}>Renewal Notice</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
-            <Text style={styles.paymentDetail}>Amount: PKR {payment.amount}</Text>
-            <Text style={styles.paymentDetail}>
-              Last Payment: {new Date(payment.lastPaymentDate).toLocaleDateString()}
-            </Text>
-            <Text style={styles.paymentDetail}>
-              Expiry: {new Date(payment.expiryDate).toLocaleDateString()}
-            </Text>
-            <View style={styles.passengerActions}>
-              {payment.status === 'Expired' && (
-                <TouchableOpacity 
-                  style={styles.reminderBtn} 
-                  onPress={() => sendPaymentReminder(payment._id)}
-                >
-                  <Text style={styles.reminderBtnText}>Send Reminder</Text>
-                </TouchableOpacity>
-              )}
-              {payment.status === 'Paid' && (
-                <TouchableOpacity 
-                  style={styles.renewalBtn} 
-                  onPress={() => sendRenewalNotification(payment._id)}
-                >
-                  <Text style={styles.renewalBtnText}>Renewal Notice</Text>
-                </TouchableOpacity>
-              )}
-              {(payment.status === 'Pending' || payment.status === 'Expired') && (
-                <TouchableOpacity 
-                  style={styles.updateStatusBtn} 
-                  onPress={() => updatePaymentStatus(payment._id, 'Paid')}
-                >
-                  <Text style={styles.updateStatusBtnText}>Mark Paid</Text>
-                </TouchableOpacity>
-              )}
+          )) : (
+            <View style={styles.emptyState}>
+              <Icon name="account-balance-wallet" size={48} color="#999" />
+              <Text style={styles.emptyText}>No passenger payments</Text>
             </View>
-          </View>
-        )) : (
-          <View style={styles.emptyState}>
-            <Icon name="account-balance-wallet" size={48} color="#999" />
-            <Text style={styles.emptyText}>No passenger payments</Text>
-          </View>
-        )}
-      </>
-    )}
-  </ScrollView>
-);const CompletedTripsList = ({ onClose }) => {
+          )}
+        </>
+      )}
+    </ScrollView>
+  );
+};
+const CompletedTripsList = ({ onClose }) => {
   const [completedTrips, setCompletedTrips] = useState([]);
   const [loading, setLoading] = useState(true);
 

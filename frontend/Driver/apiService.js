@@ -44,7 +44,46 @@ api.interceptors.response.use(
 );
 
 
-   
+   // In your apiService.js
+const apiService = {
+  // ... existing methods ...
+
+  // Driver Request APIs
+  async getDriverRequests() {
+    return this.apiCall('/transporter/driver-requests');
+  },
+
+  async approveDriverRequest(requestId) {
+    return this.apiCall(`/transporter/approve-driver-request`, {
+      method: 'POST',
+      body: JSON.stringify({ requestId })
+    });
+  },
+
+  async rejectDriverRequest(requestId) {
+    return this.apiCall(`/transporter/reject-driver-request`, {
+      method: 'POST',
+      body: JSON.stringify({ requestId })
+    });
+  },
+
+  // Passenger Request APIs
+  async getPassengerRequests() {
+    return this.apiCall('/join-requests?type=passenger');
+  },
+
+  async approvePassengerRequest(requestId) {
+    return this.apiCall(`/join-requests/${requestId}/accept`, {
+      method: 'PUT'
+    });
+  },
+
+  async rejectPassengerRequest(requestId) {
+    return this.apiCall(`/join-requests/${requestId}/reject`, {
+      method: 'PUT'
+    });
+  }
+};
 // apiService.js - Login function check
 export const authAPI = {
   login: (email, password) => 

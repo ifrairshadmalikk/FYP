@@ -2812,6 +2812,25 @@ app.post('/api/driver/login', async (req, res) => {
     });
   }
 });
+// Check vans data
+app.get('/api/vans', async (req, res) => {
+  try {
+    const vans = await Van.find();
+    res.json({ success: true, data: vans, count: vans.length });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Check stops data  
+app.get('/api/stops', async (req, res) => {
+  try {
+    const stops = await Stop.find();
+    res.json({ success: true, data: stops, count: stops.length });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // ✅ Set Driver Availability
 app.post('/api/driver/availability', driverAuthMiddleware, async (req, res) => {
