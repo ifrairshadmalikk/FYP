@@ -9,8 +9,9 @@
     "driver": "node driverserver.js",
     "dev-driver": "nodemon driverserver.js",
     "passenger ":     "node passenserver.js",
-    "dev-passenger ": "nodemon passenserver.js"
-    
+    "dev-passenger ": "nodemon passenserver.js",
+    "td ":     "node tserver.js",
+    "dev-td ": "nodemon tserver.js"    
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

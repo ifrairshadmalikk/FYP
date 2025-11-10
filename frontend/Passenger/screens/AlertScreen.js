@@ -3,42 +3,40 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   Animated,
   FlatList,
-  Alert as RNAlert,
   RefreshControl,
+  Alert as RNAlert,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import styles from '../../styles/AlertStyle';
+import styles from '../../styles/NotificationScreenStyle';
 
-const API_BASE_URL = 'http://192.168.0.109:5001/api'; // اپنا سرور URL استعمال کریں
+const API_BASE_URL = 'http://192.168.0.109:5001/api';
 
-export default function AlertsScreen({ navigation }) {
-  const [alerts, setAlerts] = useState([]);
+const categories = [
+  { id: 'all', label: 'All', icon: 'apps' },
+  { id: 'payment', label: 'Payments', icon: 'card' },
+  { id: 'trip', label: 'Trips', icon: 'car' },
+  { id: 'driver', label: 'Drivers', icon: 'person' },
+  { id: 'system', label: 'System', icon: 'settings' },
+];
+
+export default function NotificationsScreen({ navigation }) {
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [counts, setCounts] = useState({
     total: 0,
-    unread: 0,
-    actionRequired: 0
+    unread: 0
   });
 
-  const blinkAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
-  // Animation effects
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(blinkAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-        Animated.timing(blinkAnim, { toValue: 0, duration: 1000, useNativeDriver: true }),
-      ])
-    ).start();
-
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -51,73 +49,74 @@ export default function AlertsScreen({ navigation }) {
         useNativeDriver: true,
       }),
     ]).start();
+
+    fetchNotifications();
   }, []);
 
-  // Fetch alerts from backend
-  const fetchAlerts = async (category = selectedCategory) => {
+  // Fetch notifications from backend (बिना token के)
+  const fetchNotifications = async (category = selectedCategory) => {
     try {
-      const token = await getAuthToken(); // اپنا token management function استعمال کریں
-      
-      let url = `${API_BASE_URL}/alerts`;
+      let url = `${API_BASE_URL}/notifications`;
       if (category !== 'all') {
         url += `?category=${category}`;
       }
 
+      console.log('📡 Fetching notifications from:', url);
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
 
+      console.log('📊 Notifications response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.success) {
-        setAlerts(data.alerts);
-        setCounts(data.counts);
+        setNotifications(data.notifications || []);
+        setCounts(data.counts || { total: 0, unread: 0 });
+        console.log(`✅ Loaded ${data.notifications?.length || 0} notifications`);
       } else {
-        RNAlert.alert('Error', data.message || 'Failed to fetch alerts');
+        throw new Error(data.message || 'Failed to load notifications');
       }
+
     } catch (error) {
-      console.error('Fetch alerts error:', error);
-      RNAlert.alert('Error', 'Network error. Please try again.');
+      console.error('❌ Fetch notifications error:', error);
+      RNAlert.alert(
+        'Connection Error', 
+        'Please make sure server is running on http://192.168.0.109:5001'
+      );
+      setNotifications([]);
+      setCounts({ total: 0, unread: 0 });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Initial load
-  useEffect(() => {
-    fetchAlerts();
-  }, []);
-
   // Category change effect
   useEffect(() => {
     if (!loading) {
-      fetchAlerts(selectedCategory);
+      fetchNotifications(selectedCategory);
     }
   }, [selectedCategory]);
 
-  const categories = [
-    { id: 'all', label: 'All Alerts', icon: 'notifications' },
-    { id: 'travel', label: 'Travel', icon: 'car' },
-    { id: 'payment', label: 'Payment', icon: 'card' },
-    { id: 'ride', label: 'Ride Updates', icon: 'bus' },
-    { id: 'driver', label: 'Driver', icon: 'person' },
-    { id: 'route', label: 'Route', icon: 'navigate' },
-    { id: 'system', label: 'System', icon: 'settings' },
-  ];
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchNotifications();
+  };
 
   const markAsRead = async (id) => {
     try {
-      const token = await getAuthToken();
-      
-      const response = await fetch(`${API_BASE_URL}/alerts/${id}/read`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -126,28 +125,25 @@ export default function AlertsScreen({ navigation }) {
 
       if (data.success) {
         // Update local state
-        setAlerts(alerts.map(alert => 
-          alert.id === id ? { ...alert, read: true } : alert
+        setNotifications(notifications.map(notification => 
+          notification.id === id ? { ...notification, read: true } : notification
         ));
-        // Refresh counts
-        fetchAlerts();
-      } else {
-        RNAlert.alert('Error', data.message || 'Failed to mark as read');
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          unread: Math.max(0, prev.unread - 1)
+        }));
       }
     } catch (error) {
       console.error('Mark as read error:', error);
-      RNAlert.alert('Error', 'Network error. Please try again.');
     }
   };
 
   const markAllAsRead = async () => {
     try {
-      const token = await getAuthToken();
-      
-      const response = await fetch(`${API_BASE_URL}/alerts/mark-all-read`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -155,42 +151,33 @@ export default function AlertsScreen({ navigation }) {
       const data = await response.json();
 
       if (data.success) {
-        // Update all alerts to read
-        setAlerts(alerts.map(alert => ({ ...alert, read: true })));
-        // Refresh counts
-        fetchAlerts();
-        RNAlert.alert('Success', 'All alerts marked as read');
-      } else {
-        RNAlert.alert('Error', data.message || 'Failed to mark all as read');
+        // Update all notifications to read
+        setNotifications(notifications.map(notification => ({ 
+          ...notification, 
+          read: true 
+        })));
+        // Update counts
+        setCounts(prev => ({
+          ...prev,
+          unread: 0
+        }));
+        RNAlert.alert('Success', 'All notifications marked as read');
       }
     } catch (error) {
       console.error('Mark all as read error:', error);
-      RNAlert.alert('Error', 'Network error. Please try again.');
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchAlerts();
-  };
-
-  const getAlertColor = (type) => {
+  const getNotificationColor = (type) => {
     switch (type) {
-      case 'urgent': return ['#FF6B6B', '#EE5A52'];
-      case 'warning': return ['#FFA726', '#FF9800'];
       case 'success': return ['#A1D826', '#8BC220'];
+      case 'payment': return ['#FFA726', '#FF9800'];
+      case 'warning': return ['#FF6B6B', '#EE5A52'];
       case 'info': return ['#5AC8FA', '#4AB9F1'];
+      case 'trip': return ['#A1D826', '#8BC220'];
+      case 'driver': return ['#5AC8FA', '#4AB9F1'];
+      case 'system': return ['#FFA726', '#FF9800'];
       default: return ['#A1D826', '#8BC220'];
-    }
-  };
-
-  const getAlertIcon = (type) => {
-    switch (type) {
-      case 'urgent': return 'warning';
-      case 'warning': return 'alert-circle';
-      case 'success': return 'checkmark-circle';
-      case 'info': return 'information-circle';
-      default: return 'notifications';
     }
   };
 
@@ -216,87 +203,61 @@ export default function AlertsScreen({ navigation }) {
     </TouchableOpacity>
   );
 
-  const renderAlertItem = ({ item, index }) => (
+  const renderNotification = ({ item, index }) => (
     <Animated.View
       style={[
-        styles.alertCard,
-        {
+        styles.notificationCard,
+        { 
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }]
         }
       ]}
     >
-      {/* Alert Header */}
-      <View style={styles.alertHeader}>
-        <View style={styles.alertIconContainer}>
+      <View style={styles.notificationHeader}>
+        <View style={styles.notificationIconContainer}>
           <LinearGradient
-            colors={getAlertColor(item.type)}
-            style={styles.alertIcon}
+            colors={getNotificationColor(item.type)}
+            style={styles.notificationIcon}
           >
-            <Icon name={item.icon || getAlertIcon(item.type)} size={20} color="#fff" />
+            <Icon name={item.icon} size={18} color="#fff" />
           </LinearGradient>
-          <View style={styles.alertTitleContainer}>
-            <Text style={styles.alertTitle}>{item.title}</Text>
-            <View style={styles.alertMeta}>
-              <Text style={styles.alertTime}>{item.date} • {item.time}</Text>
-              {item.actionRequired && (
-                <View style={styles.actionRequiredBadge}>
-                  <Text style={styles.actionRequiredText}>Action Required</Text>
-                </View>
-              )}
-            </View>
+          <View style={styles.notificationTitleContainer}>
+            <Text style={styles.notificationTitle}>{item.title}</Text>
+            <Text style={styles.notificationTime}>{item.time}</Text>
           </View>
         </View>
         
         {!item.read && (
-          <Animated.View 
-            style={[
-              styles.unreadIndicator,
-              { opacity: blinkAnim }
-            ]} 
-          />
+          <TouchableOpacity 
+            style={styles.markReadBtn}
+            onPress={() => markAsRead(item.id)}
+          >
+            <LinearGradient
+              colors={['#A1D826', '#8BC220']}
+              style={styles.markReadGradient}
+            >
+              <Icon name="checkmark" size={14} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
         )}
       </View>
 
-      {/* Alert Body */}
-      <View style={styles.alertBody}>
-        <Text style={styles.alertMessage}>{item.message}</Text>
+      <View style={styles.notificationBody}>
+        <Text style={styles.notificationMessage}>{item.message}</Text>
       </View>
 
-      {/* Alert Footer */}
-      <View style={styles.alertFooter}>
-        <View style={styles.alertActions}>
-          {!item.read && (
-            <TouchableOpacity 
-              style={styles.markReadBtn}
-              onPress={() => markAsRead(item.id)}
-            >
-              <LinearGradient
-                colors={['#A1D826', '#8BC220']}
-                style={styles.markReadGradient}
-              >
-                <Icon name="checkmark" size={14} color="#fff" />
-                <Text style={styles.markReadText}>Mark Read</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-          
-          {item.actionRequired && (
-            <TouchableOpacity style={styles.actionBtn}>
-              <Text style={styles.actionText}>Take Action</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Unread Border */}
       {!item.read && (
-        <View style={styles.unreadBorder} />
+        <View style={styles.unreadIndicator} />
       )}
     </Animated.View>
   );
 
-  const filteredAlerts = alerts; // اب فیلٹرنگ بیک اینڈ میں ہو رہی ہے
+  const renderLoadingState = () => (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#A1D826" />
+      <Text style={styles.loadingText}>Loading notifications...</Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -312,10 +273,10 @@ export default function AlertsScreen({ navigation }) {
           <Icon name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Alerts & Notifications</Text>
+          <Text style={styles.headerTitle}>Notifications</Text>
           {counts.unread > 0 && (
-            <View style={styles.unreadCountBadge}>
-              <Text style={styles.unreadCountText}>{counts.unread}</Text>
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadCount}>{counts.unread}</Text>
             </View>
           )}
         </View>
@@ -326,16 +287,6 @@ export default function AlertsScreen({ navigation }) {
           <Icon name="checkmark-done" size={22} color="#fff" />
         </TouchableOpacity>
       </LinearGradient>
-
-      {/* Action Required Banner */}
-      {counts.actionRequired > 0 && (
-        <View style={styles.actionBanner}>
-          <Icon name="warning" size={20} color="#FFA726" />
-          <Text style={styles.actionBannerText}>
-            {counts.actionRequired} alert{counts.actionRequired !== 1 ? 's' : ''} require your attention
-          </Text>
-        </View>
-      )}
 
       {/* Category Tabs */}
       <View style={styles.categoryContainer}>
@@ -349,61 +300,59 @@ export default function AlertsScreen({ navigation }) {
         />
       </View>
 
-      {/* Alerts Count */}
-      <View style={styles.alertsCount}>
+      {/* Notifications Count */}
+      <View style={styles.notificationsCount}>
         <Text style={styles.countText}>
-          {counts.total} alert{counts.total !== 1 ? 's' : ''}
+          {counts.total} notification{counts.total !== 1 ? 's' : ''}
           {selectedCategory !== 'all' && ` in ${categories.find(cat => cat.id === selectedCategory)?.label}`}
         </Text>
-        <TouchableOpacity onPress={() => setRefreshing(true)}>
+        <TouchableOpacity onPress={onRefresh}>
           <Icon name="refresh" size={16} color="#7f8c8d" />
         </TouchableOpacity>
       </View>
 
-      {/* Alerts List */}
-      <FlatList
-        data={filteredAlerts}
-        renderItem={renderAlertItem}
-        keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#A1D826']}
-            tintColor={'#A1D826'}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Icon name="notifications-off" size={64} color="#e9ecef" />
-            <Text style={styles.emptyStateTitle}>
-              {loading ? 'Loading...' : 'No Alerts'}
-            </Text>
-            <Text style={styles.emptyStateText}>
-              {loading 
-                ? 'Fetching your alerts...' 
-                : selectedCategory === 'all' 
-                  ? "You're all caught up!" 
-                  : `No ${categories.find(cat => cat.id === selectedCategory)?.label?.toLowerCase()} alerts`
-              }
-            </Text>
-          </View>
-        }
-      />
+      {/* Loading State */}
+      {loading && renderLoadingState()}
+
+      {/* Notifications List */}
+      {!loading && (
+        <FlatList
+          data={notifications}
+          renderItem={renderNotification}
+          keyExtractor={item => item.id.toString()}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#A1D826']}
+              tintColor="#A1D826"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Icon name="notifications-off" size={64} color="#e9ecef" />
+              <Text style={styles.emptyStateTitle}>No Notifications</Text>
+              <Text style={styles.emptyStateText}>
+                No notifications found.
+              </Text>
+            </View>
+          }
+        />
+      )}
 
       {/* Mark All as Read FAB */}
-      {counts.unread > 0 && (
+      {!loading && counts.unread > 0 && (
         <TouchableOpacity 
           style={styles.fab}
           onPress={markAllAsRead}
         >
           <LinearGradient
-            colors={['#FF6B6B', '#EE5A52']}
+            colors={['#A1D826', '#8BC220']}
             style={styles.fabGradient}
           >
-            <Icon name="checkmark-done" size={18} color="#fff" />
+            <Icon name="checkmark-done" size={20} color="#fff" />
             <Text style={styles.fabText}>Mark All Read</Text>
           </LinearGradient>
         </TouchableOpacity>
@@ -411,9 +360,3 @@ export default function AlertsScreen({ navigation }) {
     </View>
   );
 }
-
-// Helper function to get auth token (اپنے token storage کے مطابق اپ ڈیٹ کریں)
-const getAuthToken = async () => {
-  
-  return 'your-auth-token-here';
-};

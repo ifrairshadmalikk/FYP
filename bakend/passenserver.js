@@ -7,7 +7,7 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
-
+const JWT_SECRET = 'your_jwt_secret_key_here';
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -67,6 +67,21 @@ const passengerSchema = new mongoose.Schema({
   lastLogin: {
     type: Date
   }
+});
+const rideHistorySchema = new mongoose.Schema({
+    passengerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Passenger', required: true },
+    date: { type: Date, required: true },
+    time: { type: String, required: true },
+    route: { type: String, required: true },
+    driver: { type: String, required: true },
+    vehicle: { type: String, required: true },
+    scheduledTime: { type: String, required: true },
+    actualTime: { type: String, required: true },
+    delay: { type: String },
+    status: { type: String, enum: ['completed', 'cancelled', 'missed'], default: 'completed' },
+    rating: { type: Number, min: 1, max: 5 },
+    missed: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now }
 });
 
 // Hash password before saving
@@ -172,6 +187,7 @@ app.post('/api/auth/login', async (req, res) => {
         success: false,
         message: 'Please enter a valid email address'
       });
+      
     }
 
     // Find passenger
@@ -471,6 +487,229 @@ app.get('/api/alerts', authMiddleware, async (req, res) => {
       message: 'Error fetching alerts'
     });
   }
+});
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ message: 'Access token required' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: 'Invalid token' });
+        }
+        req.user = user;
+        next();
+    });
+};
+// Get Passenger Ride History API
+app.get('/api/passenger/ride-history', authenticateToken, async (req, res) => {
+    try {
+        const passengerId = req.user.id;
+
+        // Verify passenger exists
+        const passenger = await Passenger.findById(passengerId);
+        if (!passenger) {
+            return res.status(404).json({ message: 'Passenger not found' });
+        }
+
+        // Get ride history with driver details
+        const rideHistory = await RideHistory.find({ passengerId })
+            .populate('driverId', 'name vehicle')
+            .sort({ bookingDate: -1 });
+
+        // Transform data for frontend
+        const formattedRides = rideHistory.map(ride => ({
+            id: ride._id,
+            date: ride.bookingDate.toISOString().split('T')[0],
+            time: ride.bookingDate.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            }),
+            route: `${ride.pickupLocation} → ${ride.dropoffLocation}`,
+            driver: ride.driverId?.name || 'Driver not assigned',
+            vehicle: ride.driverId?.vehicle || 'Vehicle not assigned',
+            scheduledTime: ride.scheduledTime.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            }),
+            actualTime: ride.actualPickupTime ? 
+                ride.actualPickupTime.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                }) : 'N/A',
+            delay: calculateDelayMessage(ride.scheduledTime, ride.actualPickupTime, ride.status),
+            status: ride.status,
+            rating: ride.rating,
+            missed: ride.status === 'missed' || ride.status === 'cancelled',
+            fare: ride.fare
+        }));
+
+        res.json(formattedRides);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Helper function to calculate delay message
+function calculateDelayMessage(scheduledTime, actualTime, status) {
+    if (status === 'missed' || status === 'cancelled') {
+        return 'Ride was missed';
+    }
+
+    if (!actualTime) {
+        return 'No pickup time recorded';
+    }
+
+    const scheduled = new Date(scheduledTime);
+    const actual = new Date(actualTime);
+    const diffMinutes = Math.round((actual - scheduled) / (1000 * 60));
+
+    if (diffMinutes === 0) return 'On time';
+    if (diffMinutes > 0) return `${diffMinutes} minutes late`;
+    return `${Math.abs(diffMinutes)} minutes early`;
+}
+
+// Create New Ride API
+app.post('/api/passenger/book-ride', authenticateToken, async (req, res) => {
+    try {
+        const passengerId = req.user.id;
+        const { pickupLocation, dropoffLocation, scheduledTime } = req.body;
+
+        const ride = new RideHistory({
+            passengerId,
+            pickupLocation,
+            dropoffLocation,
+            scheduledTime: new Date(scheduledTime),
+            status: 'scheduled'
+        });
+
+        await ride.save();
+
+        res.status(201).json({
+            message: 'Ride booked successfully',
+            ride: {
+                id: ride._id,
+                pickupLocation: ride.pickupLocation,
+                dropoffLocation: ride.dropoffLocation,
+                scheduledTime: ride.scheduledTime,
+                status: ride.status
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Update Ride Status API (for drivers)
+app.put('/api/driver/update-ride/:rideId', authenticateToken, async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const { status, actualPickupTime, actualDropoffTime, driverId } = req.body;
+
+        const ride = await RideHistory.findById(rideId);
+        if (!ride) {
+            return res.status(404).json({ message: 'Ride not found' });
+        }
+
+        // Update ride details
+        if (status) ride.status = status;
+        if (actualPickupTime) ride.actualPickupTime = new Date(actualPickupTime);
+        if (actualDropoffTime) ride.actualDropoffTime = new Date(actualDropoffTime);
+        if (driverId) ride.driverId = driverId;
+
+        // Calculate delay if actual pickup time is provided
+        if (actualPickupTime && ride.scheduledTime) {
+            const scheduled = new Date(ride.scheduledTime);
+            const actual = new Date(actualPickupTime);
+            ride.delayMinutes = Math.round((actual - scheduled) / (1000 * 60));
+        }
+
+        await ride.save();
+
+        res.json({
+            message: 'Ride updated successfully',
+            ride: {
+                id: ride._id,
+                status: ride.status,
+                actualPickupTime: ride.actualPickupTime,
+                actualDropoffTime: ride.actualDropoffTime,
+                delayMinutes: ride.delayMinutes
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Add Rating to Ride API
+app.post('/api/passenger/rate-ride/:rideId', authenticateToken, async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const { rating, feedback } = req.body;
+        const passengerId = req.user.id;
+
+        const ride = await RideHistory.findOne({ _id: rideId, passengerId });
+        if (!ride) {
+            return res.status(404).json({ message: 'Ride not found' });
+        }
+
+        if (ride.status !== 'completed') {
+            return res.status(400).json({ message: 'Can only rate completed rides' });
+        }
+
+        ride.rating = rating;
+        if (feedback) ride.feedback = feedback;
+
+        await ride.save();
+
+        res.json({
+            message: 'Rating submitted successfully',
+            ride: {
+                id: ride._id,
+                rating: ride.rating,
+                feedback: ride.feedback
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Get Ride Statistics API
+app.get('/api/passenger/ride-stats', authenticateToken, async (req, res) => {
+    try {
+        const passengerId = req.user.id;
+
+        const totalRides = await RideHistory.countDocuments({ passengerId });
+        const completedRides = await RideHistory.countDocuments({ 
+            passengerId, 
+            status: 'completed' 
+        });
+        const missedRides = await RideHistory.countDocuments({ 
+            passengerId, 
+            status: { $in: ['missed', 'cancelled'] } 
+        });
+
+        const averageRating = await RideHistory.aggregate([
+            { $match: { passengerId: mongoose.Types.ObjectId(passengerId), rating: { $ne: null } } },
+            { $group: { _id: null, avgRating: { $avg: '$rating' } } }
+        ]);
+
+        res.json({
+            totalRides,
+            completedRides,
+            missedRides,
+            averageRating: averageRating.length > 0 ? Math.round(averageRating[0].avgRating * 10) / 10 : 0
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
 });
 
 // ✅ Mark Alert as Read
@@ -772,6 +1011,49 @@ app.put('/api/notifications/mark-all-read', (req, res) => {
   }
 });
 
+// In your backend (Node.js/Express example)
+
+const router = express.Router();
+
+// Make sure this endpoint exists
+router.get('/rides/history', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const rides = await Ride.find({ passengerId: userId }).sort({ date: -1 });
+    
+    res.json({
+      success: true,
+      rides: rides.map(ride => ({
+        id: ride._id,
+        route: ride.route,
+        date: ride.date,
+        scheduledTime: ride.scheduledTime,
+        actualTime: ride.actualTime,
+        status: ride.status,
+        missed: ride.missed,
+        delay: ride.delay,
+        driver: ride.driverName,
+        vehicle: ride.vehicleNumber,
+        rating: ride.rating,
+        fare: ride.fare
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching ride history'
+    });
+  }
+});
+
+// Open endpoint for non-authenticated users (if needed)
+router.get('/rides/history/open', async (req, res) => {
+  // Return sample data or public rides
+  res.json({
+    success: true,
+    rides: [] // or sample data
+  });
+});
 
 const PORT = process.env.PORT || 5001;
 

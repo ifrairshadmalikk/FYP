@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, StatusBar } from 'react-native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../../context/AuthContext';
 
 // Import screens
 import PassengerDashboard from './PassengerDashboard';
@@ -32,6 +33,53 @@ function DashboardStack() {
 
 // Custom Drawer Content Component
 function CustomDrawerContent({ navigation }) {
+  const { userInfo, userToken, logout } = useAuth();
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user profile data from backend
+  const fetchUserProfile = async () => {
+    try {
+      if (!userToken) {
+        console.log('No token available');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('http://192.168.0.109:5001/api/passenger/profile', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setUserData(data.passenger);
+      } else {
+        console.log('Failed to fetch profile:', data.message);
+        // Use basic user info from auth context if profile fetch fails
+        if (userInfo) {
+          setUserData(userInfo);
+        }
+      }
+    } catch (error) {
+      console.error('Profile fetch error:', error);
+      // Use basic user info from auth context on error
+      if (userInfo) {
+        setUserData(userInfo);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, [userToken]);
+
   const menuItems = [
     { icon: "grid-outline", name: "Dashboard", screen: "Dashboard" },
     { icon: "notifications-outline", name: "Notifications", screen: "Notifications" },
@@ -63,6 +111,7 @@ function CustomDrawerContent({ navigation }) {
           text: "Logout", 
           style: "destructive",
           onPress: () => {
+            logout();
             navigation.reset({
               index: 0,
               routes: [{ name: 'PassengerLogin' }],
@@ -71,6 +120,49 @@ function CustomDrawerContent({ navigation }) {
         }
       ]
     );
+  };
+
+  // Helper function to get user initials
+  const getUserInitials = () => {
+    if (userData?.fullName) {
+      return userData.fullName
+        .split(' ')
+        .map(name => name[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    return 'PK';
+  };
+
+  // Helper function to get display name
+  const getDisplayName = () => {
+    if (userData?.fullName) {
+      return userData.fullName;
+    }
+    if (userInfo?.fullName) {
+      return userInfo.fullName;
+    }
+    return 'Passenger User';
+  };
+
+  // Helper function to get email
+  const getEmail = () => {
+    if (userData?.email) {
+      return userData.email;
+    }
+    if (userInfo?.email) {
+      return userInfo.email;
+    }
+    return 'user@email.com';
+  };
+
+  // Helper function to get member status
+  const getMemberStatus = () => {
+    if (userData?.isVerified) {
+      return 'Verified Member';
+    }
+    return 'Premium Member';
   };
 
   return (
@@ -87,14 +179,22 @@ function CustomDrawerContent({ navigation }) {
         <View style={styles.headerContent}>
           <View style={styles.userInfo}>
             <View style={styles.userAvatar}>
-              <Text style={styles.userInitials}>AK</Text>
+              <Text style={styles.userInitials}>
+                {getUserInitials()}
+              </Text>
             </View>
             <View style={styles.userDetails}>
-              <Text style={styles.userName}>Ahmed Khan</Text>
-              <Text style={styles.userEmail}>ahmed.khan@email.com</Text>
+              <Text style={styles.userName}>
+                {loading ? 'Loading...' : getDisplayName()}
+              </Text>
+              <Text style={styles.userEmail}>
+                {getEmail()}
+              </Text>
               <View style={styles.memberBadge}>
                 <Icon name="star" size={12} color="#FFD700" />
-                <Text style={styles.memberText}>Premium Member</Text>
+                <Text style={styles.memberText}>
+                  {getMemberStatus()}
+                </Text>
               </View>
             </View>
           </View>
@@ -210,12 +310,10 @@ function PassengerAppNavigation() {
         name="HelpSupport" 
         component={HelpSupportScreen}
       />
-      {/* ✅ NEW: Contact Support Screen */}
       <Drawer.Screen 
         name="ContactSupport" 
         component={ContactSupportScreen}
       />
-      {/* ✅ NEW: Terms & Conditions Screen */}
       <Drawer.Screen 
         name="TermsConditions" 
         component={TermsConditionsScreen}
@@ -223,6 +321,7 @@ function PassengerAppNavigation() {
     </Drawer.Navigator>
   );
 }
+
 
 // Enhanced Styles
 const styles = StyleSheet.create({

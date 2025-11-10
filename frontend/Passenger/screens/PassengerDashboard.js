@@ -17,10 +17,13 @@ import Icon from "react-native-vector-icons/Ionicons";
 import MapView, { Marker } from "react-native-maps";
 import styles from "../../styles/PassengerDashboardStyle";
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../../context/AuthContext';
 
-const API_BASE_URL = "http://localhost:5001/api";
+// Use your actual IP address
+const API_BASE_URL = "http://192.168.0.109:5001/api";
 
 export default function PassengerDashboard({ navigation }) {
+  const { userToken, logout } = useAuth();
   const [showTravelAlert, setShowTravelAlert] = useState(true);
   const [showArrivalAlert, setShowArrivalAlert] = useState(true);
   const [callModalVisible, setCallModalVisible] = useState(false);
@@ -30,7 +33,8 @@ export default function PassengerDashboard({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [passengerData, setPassengerData] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [driverLocation, setDriverLocation] = useState(null);
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -77,26 +81,6 @@ export default function PassengerDashboard({ navigation }) {
     }
   };
 
-  const fetchAlerts = async () => {
-    try {
-      const token = await getAuthToken(); // Implement your token retrieval
-      const response = await fetch(`${API_BASE_URL}/alerts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        // Process alerts data
-        console.log("Alerts loaded:", data.alerts);
-      }
-    } catch (error) {
-      console.error("Error fetching alerts:", error);
-    }
-  };
-
   const markNotificationAsRead = async (notificationId) => {
     try {
       const response = await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
@@ -107,7 +91,7 @@ export default function PassengerDashboard({ navigation }) {
       });
       
       if (response.ok) {
-        fetchNotifications(); // Refresh notifications
+        fetchNotifications();
       }
     } catch (error) {
       console.error("Error marking notification as read:", error);
@@ -124,7 +108,7 @@ export default function PassengerDashboard({ navigation }) {
       });
       
       if (response.ok) {
-        fetchNotifications(); // Refresh notifications
+        fetchNotifications();
       }
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
@@ -133,7 +117,6 @@ export default function PassengerDashboard({ navigation }) {
 
   const sendChatMessage = async (message) => {
     try {
-      // Simulate API call for chat
       const newMsg = {
         id: Date.now(),
         text: message,
@@ -146,7 +129,6 @@ export default function PassengerDashboard({ navigation }) {
       
       setChatMessages(prev => [...prev, newMsg]);
       
-      // Simulate driver response
       setTimeout(() => {
         const driverMsg = {
           id: Date.now() + 1,
@@ -167,37 +149,38 @@ export default function PassengerDashboard({ navigation }) {
 
   const confirmTravel = async () => {
     try {
-      // API call to confirm travel
-      const token = await getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/travel/confirm`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          tripDate: new Date().toISOString().split('T')[0],
-          confirmed: true
-        })
-      });
+      if (userToken) {
+        const response = await fetch(`${API_BASE_URL}/travel/confirm`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            tripDate: new Date().toISOString().split('T')[0],
+            confirmed: true
+          })
+        });
 
-      if (response.ok) {
-        // Stop animations and hide alert
-        travelAlertPulseAnim.stopAnimation();
-        Animated.timing(travelAlertPulseAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-        
-        Animated.timing(travelAlertSlideAnim, {
-          toValue: -100,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => setShowTravelAlert(false));
-        
-        Alert.alert("Success", "Travel confirmed for tomorrow!");
+        if (response.ok) {
+          console.log("Travel confirmed successfully");
+        }
       }
+
+      travelAlertPulseAnim.stopAnimation();
+      Animated.timing(travelAlertPulseAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+      
+      Animated.timing(travelAlertSlideAnim, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setShowTravelAlert(false));
+      
+      Alert.alert("Success", "Travel confirmed for tomorrow!");
     } catch (error) {
       console.error("Error confirming travel:", error);
       Alert.alert("Error", "Failed to confirm travel");
@@ -279,7 +262,6 @@ export default function PassengerDashboard({ navigation }) {
 
     // Load initial data
     fetchNotifications();
-    fetchAlerts();
   }, []);
 
   // Call ring animation
@@ -352,26 +334,19 @@ export default function PassengerDashboard({ navigation }) {
   };
 
   const handleAlertNavigation = () => {
-    navigation.navigate('AlertScreen', { 
-      notifications,
-      onMarkAsRead: markNotificationAsRead,
-      onMarkAllAsRead: markAllNotificationsAsRead
-    });
+       navigation.navigate('AlertScreen', { 
+     notifications,
+     onMarkAsRead: markNotificationAsRead,
+     onMarkAllAsRead: markAllNotificationsAsRead
+     });
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      fetchNotifications(),
-      fetchAlerts()
+      fetchNotifications()
     ]);
     setRefreshing(false);
-  };
-
-  // Helper function to get auth token (implement based on your auth system)
-  const getAuthToken = async () => {
-    // Implement token retrieval from your auth context or storage
-    return "your-auth-token";
   };
 
   return (
@@ -625,44 +600,6 @@ export default function PassengerDashboard({ navigation }) {
           </View>
         </Animated.View>
 
-        {/* Quick Actions */}
-        <Animated.View style={{ transform: [{ translateY: cardTranslateY }] }}>
-          <View style={styles.sectionCard}>
-            <LinearGradient
-              colors={['#A1D826', '#8BC220']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.sectionHeaderGradient}
-            >
-              <View style={styles.sectionTitleContainer}>
-                <Icon name="flash" size={22} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.cardTitle}>Quick Actions</Text>
-              </View>
-            </LinearGradient>
-
-            <View style={styles.quickActions}>
-              <TouchableOpacity style={styles.quickActionBtn}>
-                <Icon name="location" size={24} color="#A1D826" />
-                <Text style={styles.quickActionText}>Track Van</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.quickActionBtn}>
-                <Icon name="document-text" size={24} color="#A1D826" />
-                <Text style={styles.quickActionText}>Trip History</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.quickActionBtn}>
-                <Icon name="card" size={24} color="#A1D826" />
-                <Text style={styles.quickActionText}>Payments</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.quickActionBtn}>
-                <Icon name="help-circle" size={24} color="#A1D826" />
-                <Text style={styles.quickActionText}>Support</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Animated.View>
       </ScrollView>
 
       {/* Enhanced Call Modal */}

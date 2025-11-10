@@ -6,6 +6,8 @@ import {
   ScrollView,
   Animated,
   FlatList,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,109 +15,118 @@ import styles from '../../styles/RideHistoryStyle';
 
 export default function RideHistoryScreen({ navigation }) {
   const [selectedFilter, setSelectedFilter] = useState('all');
-  const [rides, setRides] = useState([
-    {
-      id: 1,
-      date: '2024-01-15',
-      time: '7:30 AM',
-      route: 'DHA Phase 5 → Saddar',
-      driver: 'Muhammad Hassan',
-      vehicle: 'Toyota Hiace',
-      scheduledTime: '7:15 AM',
-      actualTime: '7:30 AM',
-      delay: '15 minutes late',
-      status: 'completed',
-      rating: 4.8,
-      missed: false,
-    },
-    {
-      id: 2,
-      date: '2024-01-14',
-      time: '8:15 AM',
-      route: 'DHA Phase 5 → Clifton',
-      driver: 'Ali Ahmed',
-      vehicle: 'Toyota Hiace',
-      scheduledTime: '8:00 AM',
-      actualTime: '8:15 AM',
-      delay: '15 minutes late',
-      status: 'completed',
-      rating: 4.5,
-      missed: false,
-    },
-    {
-      id: 3,
-      date: '2024-01-13',
-      time: '7:45 AM',
-      route: 'DHA Phase 5 → I.I Chundrigar',
-      driver: 'Usman Khan',
-      vehicle: 'Toyota Hiace',
-      scheduledTime: '7:30 AM',
-      actualTime: '7:45 AM',
-      delay: '15 minutes late',
-      status: 'completed',
-      rating: 4.9,
-      missed: false,
-    },
-    {
-      id: 4,
-      date: '2024-01-12',
-      time: '8:00 AM',
-      route: 'DHA Phase 5 → Saddar',
-      driver: 'Bilal Raza',
-      vehicle: 'Toyota Hiace',
-      scheduledTime: '7:45 AM',
-      actualTime: '8:00 AM',
-      delay: '15 minutes late',
-      status: 'cancelled',
-      rating: null,
-      missed: true,
-    },
-    {
-      id: 5,
-      date: '2024-01-11',
-      time: '8:30 AM',
-      route: 'DHA Phase 5 → Clifton',
-      driver: 'Ahmed Raza',
-      vehicle: 'Toyota Hiace',
-      scheduledTime: '8:15 AM',
-      actualTime: '8:30 AM',
-      delay: '15 minutes late',
-      status: 'cancelled',
-      rating: null,
-      missed: true,
-    },
-    {
-      id: 6,
-      date: '2024-01-10',
-      time: '7:20 AM',
-      route: 'DHA Phase 5 → I.I Chundrigar',
-      driver: 'Kamran Ali',
-      vehicle: 'Toyota Hiace',
-      scheduledTime: '7:15 AM',
-      actualTime: '7:20 AM',
-      delay: '5 minutes late',
-      status: 'completed',
-      rating: 4.7,
-      missed: false,
-    },
-  ]);
+  const [rides, setRides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
+  // Fetch ride history from backend
+  const fetchRideHistory = async (isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoading(true);
+      else setRefreshing(true);
+
+      // Replace with your actual API endpoint
+      const response = await fetch('http://192.168.0.109:5001/api/passenger/ride-history', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await getAuthToken()}`, // Add your auth token
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch ride history');
+      }
+
+      const data = await response.json();
+      
+      // Transform backend data to match frontend structure
+      const formattedRides = data.map((ride, index) => ({
+        id: ride.id || index + 1,
+        date: formatDate(ride.bookingDate || ride.createdAt),
+        time: formatTime(ride.bookingDate || ride.createdAt),
+        route: `${ride.pickupLocation} → ${ride.dropoffLocation}`,
+        driver: ride.driver?.name || 'Driver Information',
+        vehicle: ride.driver?.vehicle || 'Vehicle Information',
+        scheduledTime: formatTime(ride.scheduledTime),
+        actualTime: formatTime(ride.actualPickupTime),
+        delay: calculateDelay(ride.scheduledTime, ride.actualPickupTime),
+        status: ride.status?.toLowerCase() || 'completed',
+        rating: ride.rating,
+        missed: ride.status?.toLowerCase() === 'missed' || ride.status?.toLowerCase() === 'cancelled',
+      }));
+
+      setRides(formattedRides);
+      
+      // Start animations after data is loaded
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+    } catch (error) {
+      console.error('Error fetching ride history:', error);
+      Alert.alert('Error', 'Failed to load ride history. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Helper function to get auth token (implement based on your auth system)
+  const getAuthToken = async () => {
+    // Replace with your actual token retrieval logic
+    return 'your-auth-token';
+  };
+
+  // Helper function to format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
+
+  // Helper function to format time
+  const formatTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Helper function to calculate delay
+  const calculateDelay = (scheduledTime, actualTime) => {
+    if (!scheduledTime || !actualTime) return 'N/A';
+    
+    const scheduled = new Date(scheduledTime);
+    const actual = new Date(actualTime);
+    const diffMinutes = Math.round((actual - scheduled) / (1000 * 60));
+    
+    if (diffMinutes === 0) return 'On time';
+    if (diffMinutes > 0) return `${diffMinutes} minutes late`;
+    return `${Math.abs(diffMinutes)} minutes early`;
+  };
+
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    fetchRideHistory();
   }, []);
 
   const filters = [
@@ -131,7 +142,7 @@ export default function RideHistoryScreen({ navigation }) {
     ? rides.filter(ride => ride.status === 'completed' && !ride.missed)
     : selectedFilter === 'cancelled'
     ? rides.filter(ride => ride.missed)
-    : rides.filter(ride => ride.delay && ride.delay !== 'On time' && !ride.missed);
+    : rides.filter(ride => ride.delay && ride.delay !== 'On time' && !ride.delay.includes('early') && !ride.missed);
 
   const getStatusColor = (status, missed) => {
     if (missed) return ['#FF6B6B', '#EE5A52'];
@@ -158,6 +169,10 @@ export default function RideHistoryScreen({ navigation }) {
       case 'cancelled': return 'Cancelled';
       default: return 'Pending';
     }
+  };
+
+  const handleRefresh = () => {
+    fetchRideHistory(true);
   };
 
   const renderRideCard = ({ item, index }) => (
@@ -238,6 +253,32 @@ export default function RideHistoryScreen({ navigation }) {
     </Animated.View>
   );
 
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={['#A1D826', '#8BC220']}
+          style={styles.header}
+        >
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Ride History</Text>
+          <TouchableOpacity style={styles.downloadButton}>
+            <Icon name="download-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+        </LinearGradient>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#A1D826" />
+          <Text style={styles.loadingText}>Loading your ride history...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -289,6 +330,8 @@ export default function RideHistoryScreen({ navigation }) {
         keyExtractor={item => item.id.toString()}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Icon name="car-outline" size={64} color="#ccc" />

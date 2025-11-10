@@ -19,7 +19,7 @@ import PassengerAppNavigation from "./frontend/Passenger/screens/PassengerAppNav
 import PassengerLoginScreen from "./frontend/Passenger/screens/PassengerLoginScreen";
 import PassengerDashboard from "./frontend/Passenger/screens/PassengerDashboard";
 import  PassengerRegistrationScreen  from "./frontend/Passenger/screens/PassengerRegistrationScreen";
-
+import { AuthProvider } from './frontend/context/AuthContext';
 
 // Transporter Screens
 import TransporterDashboardScreen from "./frontend/Transporter/TransporterDashboard";
@@ -170,6 +170,7 @@ export default function App() {
     userProfile,
   };
   return (
+     <AuthProvider>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {/* 🌟 Initial Flow */}
@@ -217,6 +218,6 @@ export default function App() {
 
         <Stack.Screen name="DriverRegistration" component={DriverRegistrationScreen} />
       </Stack.Navigator>
-    </NavigationContainer>
+    </NavigationContainer></AuthProvider>
   );
 }
