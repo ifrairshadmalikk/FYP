@@ -1191,7 +1191,8 @@ const additionalStyles = {
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
-  }
+  },
+  
 };
 
 export default UnifiedDriverDashboard;

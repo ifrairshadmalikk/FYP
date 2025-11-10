@@ -29,48 +29,64 @@ const DriverLoginScreen = ({ navigation }) => {
     }
   };
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password.");
-      return;
-    }
+ const handleLogin = async () => {
+  if (!email || !password) {
+    Alert.alert("Error", "Please enter both email and password.");
+    return;
+  }
 
-    if (!email.includes('@')) {
-      Alert.alert("Error", "Please enter a valid email address.");
-      return;
-    }
+  if (!email.includes('@')) {
+    Alert.alert("Error", "Please enter a valid email address.");
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const response = await authAPI.login(email, password);
-      
-      if (response.data.success) {
-        await setAuthToken(response.data.token);
+  setLoading(true);
+  try {
+    console.log('🔄 Attempting login with:', { email: email.toLowerCase().trim() });
+    
+    const response = await authAPI.login(email, password);
+    
+    console.log('✅ Login response:', response.data);
+    
+    if (response.data.success) {
+      await setAuthToken(response.data.token);
 
-// navigate into nested drawer and open its DriverDashboard screen
-navigation.navigate('Driver', {
-  screen: 'DriverDashboard',
-  params: { driver: response.data.driver },
-});
-        Alert.alert("Success", "Logged in successfully!");
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      let errorMessage = "Login failed. Please try again.";
+      // Navigate to dashboard
+      navigation.navigate('Driver', {
+        screen: 'DriverDashboard',
+        params: { driver: response.data.driver },
+      });
       
-      if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
-        errorMessage = "Network error. Please check your connection and server URL.";
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      Alert.alert("Login Error", errorMessage);
-    } finally {
-      setLoading(false);
+      Alert.alert("Success", "Logged in successfully!");
+    } else {
+      Alert.alert("Login Failed", response.data.message || "Unknown error occurred");
     }
-  };
+  } catch (error) {
+    console.error('❌ Login error details:', {
+      code: error.code,
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url
+    });
+    
+    let errorMessage = "Login failed. Please try again.";
+    
+    if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
+      errorMessage = "Cannot connect to server. Please check:\n• Your internet connection\n• Server is running\n• Correct server IP address";
+    } else if (error.response?.status === 400) {
+      errorMessage = error.response.data?.message || "Invalid email or password format";
+    } else if (error.response?.status === 401) {
+      errorMessage = "Invalid email or password";
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+    
+    Alert.alert("Login Error", errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const styles = {
     container: { 

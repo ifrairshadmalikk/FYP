@@ -410,6 +410,42 @@ const TransporterDashboard = ()=> {
       setIsLoading(false);
     }
   };
+  const loadTrips = async () => {
+  try {
+    const tripsData = await apiService.getTrips();
+    
+    // Handle case where tripsData might be an object instead of array
+    const tripsArray = Array.isArray(tripsData) ? tripsData : 
+                      (tripsData.trips || tripsData.data || []);
+    
+    // Convert trips to vans format for compatibility
+    const vansData = tripsArray.map(trip => ({
+      id: trip._id || trip.id,
+      name: `Van ${trip.driverId?.name || 'Unknown'}`,
+      driver: trip.driverId?.name || 'Unknown Driver',
+      route: trip.routeId?.name || 'Unknown Route',
+      timeSlot: '07:00 AM',
+      status: trip.status,
+      passengers: trip.passengers?.length || 0,
+      capacity: 8,
+      currentStop: trip.currentStop,
+      stops: trip.routeId?.stops || [],
+      completedStops: trip.completedStops || [],
+      currentLocation: trip.currentLocation || { latitude: 33.6844, longitude: 73.0479 },
+      speed: trip.speed || 0,
+      eta: trip.eta || '0 min',
+      color: '#3498DB',
+      passengersList: trip.passengersList || [],
+      notifiedPickups: false,
+      notifiedComplete: false,
+    }));
+    setVans(vansData);
+  } catch (error) {
+    console.error('Error loading trips:', error);
+    // Set empty array as fallback
+    setVans([]);
+  }
+};
 
   // Individual data loading functions
   const loadProfile = async () => {
@@ -520,35 +556,7 @@ const TransporterDashboard = ()=> {
     }
   };
 
-  const loadTrips = async () => {
-    try {
-      const tripsData = await apiService.getTrips();
-      // Convert trips to vans format for compatibility
-      const vansData = tripsData.map(trip => ({
-        id: trip._id,
-        name: `Van ${trip.driverId?.name || 'Unknown'}`,
-        driver: trip.driverId?.name || 'Unknown Driver',
-        route: trip.routeId?.name || 'Unknown Route',
-        timeSlot: '07:00 AM', // You might want to map this from your data
-        status: trip.status,
-        passengers: trip.passengers?.length || 0,
-        capacity: 8, // Default capacity
-        currentStop: trip.currentStop,
-        stops: trip.routeId?.stops || [],
-        completedStops: trip.completedStops || [],
-        currentLocation: trip.currentLocation || { latitude: 33.6844, longitude: 73.0479 },
-        speed: trip.speed || 0,
-        eta: trip.eta || '0 min',
-        color: '#3498DB',
-        passengersList: trip.passengersList || [],
-        notifiedPickups: false,
-        notifiedComplete: false,
-      }));
-      setVans(vansData);
-    } catch (error) {
-      console.error('Error loading trips:', error);
-    }
-  };
+ 
 
   // Sidebar animation
   useEffect(() => {
@@ -679,46 +687,88 @@ const TransporterDashboard = ()=> {
       Alert.alert('Error', 'Failed to assign driver');
     }
   };
+// Email Service Function
+const sendAcceptanceEmail = async (email, type, name) => {
+  try {
+    const emailData = {
+      to: email,
+      subject: `Your ${type} Request Has Been Accepted`,
+      message: `
+        Dear ${name},
+        
+        Congratulations! Your ${type} request has been accepted.
+        
+        You can now login to the app and start using our services.
+        
+        Thank you,
+        Transport Team
+      `
+    };
 
-  // Request Management
-  const handleDriverRequest = async (requestId, action) => {
-    try {
-      if (action === 'accept') {
-        await apiService.approveDriverRequest(requestId);
-        Alert.alert('Success', 'Driver request accepted');
-      } else {
-        await apiService.rejectDriverRequest(requestId);
-        Alert.alert('Rejected', 'Driver request rejected');
+    // API call to send email
+    await fetch(`${API_BASE_URL}/send-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailData),
+    });
+    
+    console.log(`Email sent to ${email}`);
+  } catch (error) {
+    console.error('Error sending email:', error);
+  }
+};
+
+const handlePassengerRequest = async (requestId, action) => {
+  try {
+    const request = passengerRequests.find(req => req._id === requestId);
+    
+    if (action === 'accept') {
+      await apiService.approvePassengerRequest(requestId);
+      
+      // Email send करें
+      if (request && request.email) {
+        await sendAcceptanceEmail(request.email, 'passenger', request.name);
       }
       
-      // Reload data
-      await loadDriverRequests();
-      await loadDrivers();
-      await loadStats();
-    } catch (error) {
-      Alert.alert('Error', `Failed to ${action} driver request`);
-    }
-  };
-
-  const handlePassengerRequest = async (requestId, action) => {
-    try {
-      if (action === 'accept') {
-        await apiService.approvePassengerRequest(requestId);
-        Alert.alert('Success', 'Passenger request accepted');
-      } else {
-        await apiService.rejectPassengerRequest(requestId);
-        Alert.alert('Rejected', 'Passenger request rejected');
-      }
+      // Request को list से remove करें
+      setPassengerRequests(prev => prev.filter(req => req._id !== requestId));
       
-      // Reload data
-      await loadPassengerRequests();
-      await loadPassengers();
-      await loadStats();
-    } catch (error) {
-      Alert.alert('Error', `Failed to ${action} passenger request`);
+      // Passenger को active passengers में add करें
+      const newPassenger = {
+        _id: request._id,
+        name: request.name,
+        email: request.email,
+        phone: request.phone,
+        pickupPoint: request.pickupPoint,
+        destination: request.destination,
+        status: 'Confirmed',
+        preferredTimeSlot: request.preferredTimeSlot,
+        location: request.location
+      };
+      
+      setPassengerResponses(prev => [...prev, newPassenger]);
+      
+      // Stats update
+      setStats(prev => ({
+        ...prev,
+        totalPassengers: prev.totalPassengers + 1
+      }));
+      
+      Alert.alert('Success', 'Passenger request accepted and added to active passengers');
+    } else {
+      await apiService.rejectPassengerRequest(requestId);
+      // Request को list से remove करें
+      setPassengerRequests(prev => prev.filter(req => req._id !== requestId));
+      Alert.alert('Rejected', 'Passenger request rejected');
     }
-  };
-
+    
+    await loadStats();
+  } catch (error) {
+    Alert.alert('Error', `Failed to ${action} passenger request`);
+  }
+};
   // Payment Functions
   const sendDriverPayment = async () => {
     if (!newPayment.driver || !newPayment.amount || !newPayment.mode) {
@@ -938,12 +988,413 @@ const TransporterDashboard = ()=> {
       </View>
     </ScrollView>
   );
+  const ActiveDriversList = ({ onClose }) => {
+  const [activeDrivers, setActiveDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const OverviewSection = () => (
+  useEffect(() => {
+    loadActiveDrivers();
+  }, []);
+
+  const loadActiveDrivers = async () => {
+    try {
+      setLoading(true);
+      // Fetch active drivers from users collection with role 'driver'
+      const response = await apiService.apiCall('/users?role=driver&status=active');
+      setActiveDrivers(response.users || []);
+    } catch (error) {
+      console.error('Error loading active drivers:', error);
+      Alert.alert('Error', 'Failed to load active drivers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.listContainer}>
+        <View style={styles.listHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <Icon name="arrow-back" size={24} color={COLORS.black} />
+          </TouchableOpacity>
+          <Text style={styles.listTitle}>Active Drivers</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading drivers...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.listContainer}>
+      <View style={styles.listHeader}>
+        <TouchableOpacity onPress={onClose} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color={COLORS.black} />
+        </TouchableOpacity>
+        <Text style={styles.listTitle}>Active Drivers ({activeDrivers.length})</Text>
+        <TouchableOpacity onPress={loadActiveDrivers} style={styles.refreshButton}>
+          <Icon name="refresh" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.listContent}>
+        {activeDrivers.length > 0 ? (
+          activeDrivers.map(driver => (
+            <View key={driver._id} style={styles.driverCard}>
+              <View style={styles.driverHeader}>
+                <View style={styles.driverAvatar}>
+                  <Text style={styles.avatarText}>
+                    {driver.name?.charAt(0)?.toUpperCase() || 'D'}
+                  </Text>
+                </View>
+                <View style={styles.driverInfo}>
+                  <Text style={styles.driverName}>{driver.name}</Text>
+                  <Text style={styles.driverPhone}>{driver.phone}</Text>
+                  <Text style={styles.driverEmail}>{driver.email}</Text>
+                </View>
+                <View style={[styles.statusBadge, styles.activeBadge]}>
+                  <Text style={styles.statusText}>Active</Text>
+                </View>
+              </View>
+              
+              <View style={styles.driverDetails}>
+                <View style={styles.detailRow}>
+                  <Icon name="directions-car" size={16} color={COLORS.gray} />
+                  <Text style={styles.detailText}>{driver.vehicle || 'No vehicle'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Icon name="people" size={16} color={COLORS.gray} />
+                  <Text style={styles.detailText}>Capacity: {driver.capacity || 'N/A'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Icon name="work" size={16} color={COLORS.gray} />
+                  <Text style={styles.detailText}>Exp: {driver.experience || 'N/A'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.driverActions}>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="phone" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>Call</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="message" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>Message</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="visibility" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>View</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Icon name="directions-car" size={64} color={COLORS.gray} />
+            <Text style={styles.emptyText}>No active drivers found</Text>
+            <Text style={styles.emptySubtext}>All drivers will appear here once they are approved</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+const PassengersList = ({ onClose }) => {
+  const [passengers, setPassengers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadPassengers();
+  }, []);
+
+  const loadPassengers = async () => {
+    try {
+      setLoading(true);
+      // Fetch passengers from users collection with role 'passenger'
+      const response = await apiService.apiCall('/users?role=passenger&status=active');
+      setPassengers(response.users || []);
+    } catch (error) {
+      console.error('Error loading passengers:', error);
+      Alert.alert('Error', 'Failed to load passengers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.listContainer}>
+        <View style={styles.listHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <Icon name="arrow-back" size={24} color={COLORS.black} />
+          </TouchableOpacity>
+          <Text style={styles.listTitle}>Total Passengers</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading passengers...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.listContainer}>
+      <View style={styles.listHeader}>
+        <TouchableOpacity onPress={onClose} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color={COLORS.black} />
+        </TouchableOpacity>
+        <Text style={styles.listTitle}>Total Passengers ({passengers.length})</Text>
+        <TouchableOpacity onPress={loadPassengers} style={styles.refreshButton}>
+          <Icon name="refresh" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.listContent}>
+        {passengers.length > 0 ? (
+          passengers.map(passenger => (
+            <View key={passenger._id} style={styles.passengerCard}>
+              <View style={styles.passengerHeader}>
+                <View style={styles.passengerAvatar}>
+                  <Text style={styles.avatarText}>
+                    {passenger.name?.charAt(0)?.toUpperCase() || 'P'}
+                  </Text>
+                </View>
+                <View style={styles.passengerInfo}>
+                  <Text style={styles.passengerName}>{passenger.name}</Text>
+                  <Text style={styles.passengerPhone}>{passenger.phone}</Text>
+                  <Text style={styles.passengerEmail}>{passenger.email}</Text>
+                </View>
+                <View style={[styles.statusBadge, styles.confirmedBadge]}>
+                  <Text style={styles.statusText}>Active</Text>
+                </View>
+              </View>
+              
+              <View style={styles.passengerDetails}>
+                <View style={styles.detailRow}>
+                  <Icon name="location-pin" size={16} color={COLORS.gray} />
+                  <Text style={styles.detailText}>
+                    Pickup: {passenger.pickupPoint || 'Not specified'}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Icon name="place" size={16} color={COLORS.gray} />
+                  <Text style={styles.detailText}>
+                    Destination: {passenger.destination || 'Not specified'}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Icon name="schedule" size={16} color={COLORS.gray} />
+                  <Text style={styles.detailText}>
+                    Preferred Time: {passenger.preferredTimeSlot || 'Any'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.passengerActions}>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="phone" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>Call</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="message" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>Message</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="receipt" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>Payment</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Icon name="people" size={64} color={COLORS.gray} />
+            <Text style={styles.emptyText}>No passengers found</Text>
+            <Text style={styles.emptySubtext}>All passengers will appear here once they are approved</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+const LiveTripsList = ({ onClose }) => {
+  const [liveTrips, setLiveTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadLiveTrips();
+  }, []);
+
+  const loadLiveTrips = async () => {
+    try {
+      setLoading(true);
+      // Fetch live trips from trips collection with status 'en_route'
+      const response = await apiService.apiCall('/trips?status=en_route');
+      setLiveTrips(response.trips || []);
+    } catch (error) {
+      console.error('Error loading live trips:', error);
+      Alert.alert('Error', 'Failed to load live trips');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.listContainer}>
+        <View style={styles.listHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <Icon name="arrow-back" size={24} color={COLORS.black} />
+          </TouchableOpacity>
+          <Text style={styles.listTitle}>Live Trips</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading live trips...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.listContainer}>
+      <View style={styles.listHeader}>
+        <TouchableOpacity onPress={onClose} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color={COLORS.black} />
+        </TouchableOpacity>
+        <Text style={styles.listTitle}>Live Trips ({liveTrips.length})</Text>
+        <TouchableOpacity onPress={loadLiveTrips} style={styles.refreshButton}>
+          <Icon name="refresh" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.listContent}>
+        {liveTrips.length > 0 ? (
+          liveTrips.map(trip => (
+            <View key={trip._id} style={styles.tripCard}>
+              <View style={styles.tripHeader}>
+                <View style={styles.tripIcon}>
+                  <Icon name="directions-car" size={24} color={COLORS.warning} />
+                </View>
+                <View style={styles.tripInfo}>
+                  <Text style={styles.tripName}>
+                    {trip.driverId?.name || 'Unknown Driver'} - {trip.vehicleId?.name || 'Unknown Vehicle'}
+                  </Text>
+                  <Text style={styles.tripRoute}>
+                    {trip.routeId?.name || 'Unknown Route'}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, styles.liveBadge]}>
+                  <Text style={styles.statusText}>LIVE</Text>
+                </View>
+              </View>
+              
+              <View style={styles.tripDetails}>
+                <View style={styles.tripDetailRow}>
+                  <View style={styles.tripDetailItem}>
+                    <Icon name="people" size={14} color={COLORS.gray} />
+                    <Text style={styles.tripDetailText}>
+                      {trip.passengers?.length || 0} passengers
+                    </Text>
+                  </View>
+                  <View style={styles.tripDetailItem}>
+                    <Icon name="schedule" size={14} color={COLORS.gray} />
+                    <Text style={styles.tripDetailText}>
+                      ETA: {trip.eta || 'Calculating...'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.tripDetailRow}>
+                  <View style={styles.tripDetailItem}>
+                    <Icon name="location-pin" size={14} color={COLORS.gray} />
+                    <Text style={styles.tripDetailText}>
+                      Current: {trip.currentStop || 'En route'}
+                    </Text>
+                  </View>
+                  <View style={styles.tripDetailItem}>
+                    <Icon name="speed" size={14} color={COLORS.gray} />
+                    <Text style={styles.tripDetailText}>
+                      {trip.speed || 0} km/h
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.tripProgress}>
+                <View style={styles.progressBar}>
+                  <View 
+                    style={[
+                      styles.progressFill, 
+                      { width: `${trip.progress || 0}%` }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.progressText}>
+                  {trip.progress || 0}% Complete
+                </Text>
+              </View>
+
+              <View style={styles.tripActions}>
+                <TouchableOpacity style={[styles.actionButton, styles.trackButton]}>
+                  <Icon name="my-location" size={16} color={COLORS.white} />
+                  <Text style={[styles.actionText, styles.trackButtonText]}>Track Live</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="call" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>Call Driver</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Icon name="autorenew" size={64} color={COLORS.gray} />
+            <Text style={styles.emptyText}>No live trips</Text>
+            <Text style={styles.emptySubtext}>Currently no trips are in progress</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+
+const OverviewSection = () => {
+  const [selectedList, setSelectedList] = useState(null);
+
+  const handleCardPress = (listType) => {
+    setSelectedList(listType);
+  };
+
+  const renderDetailedList = () => {
+    switch (selectedList) {
+      case 'activeDrivers':
+        return <ActiveDriversList onClose={() => setSelectedList(null)} />;
+      case 'totalPassengers':
+        return <PassengersList onClose={() => setSelectedList(null)} />;
+      case 'ongoingTrips':
+        return <LiveTripsList onClose={() => setSelectedList(null)} />;
+      case 'completedTrips':
+        return <CompletedTripsList onClose={() => setSelectedList(null)} />;
+      default:
+        return null;
+    }
+  };
+
+  if (selectedList) {
+    return renderDetailedList();
+  }
+
+  return (
     <ScrollView style={styles.section} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
       <Text style={styles.sectionTitle}>Today's Overview</Text>
       <Text style={styles.updateText}>
-        Last Updated:{lastUpdated.toLocaleString('en-PK', { 
+        Last Updated: {lastUpdated.toLocaleString('en-PK', { 
           day: '2-digit',
           month: 'short',
           year: 'numeric',
@@ -952,26 +1403,49 @@ const TransporterDashboard = ()=> {
       <Text></Text>
 
       <View style={styles.overviewGrid}>
-        <View style={[styles.overviewCard, { backgroundColor: '#E8F5E9' }]}>
+        {/* Active Drivers - Clickable */}
+        <TouchableOpacity 
+          style={[styles.overviewCard, { backgroundColor: '#E8F5E9' }]}
+          onPress={() => handleCardPress('activeDrivers')}
+        >
           <Icon name="directions-car" size={32} color="#4CAF50" />
           <Text style={styles.overviewValue}>{stats.activeDrivers}</Text>
           <Text style={styles.overviewLabel}>Active Drivers</Text>
-        </View>
-        <View style={[styles.overviewCard, { backgroundColor: '#E3F2FD' }]}>
+          <Icon name="chevron-right" size={20} color="#4CAF50" style={styles.cardArrow} />
+        </TouchableOpacity>
+
+        {/* Total Passengers - Clickable */}
+        <TouchableOpacity 
+          style={[styles.overviewCard, { backgroundColor: '#E3F2FD' }]}
+          onPress={() => handleCardPress('totalPassengers')}
+        >
           <Icon name="people" size={32} color="#2196F3" />
           <Text style={styles.overviewValue}>{stats.totalPassengers}</Text>
           <Text style={styles.overviewLabel}>Total Riders</Text>
-        </View>
-        <View style={[styles.overviewCard, { backgroundColor: '#FFF3E0' }]}>
+          <Icon name="chevron-right" size={20} color="#2196F3" style={styles.cardArrow} />
+        </TouchableOpacity>
+
+        {/* Live Trips - Clickable */}
+        <TouchableOpacity 
+          style={[styles.overviewCard, { backgroundColor: '#FFF3E0' }]}
+          onPress={() => handleCardPress('ongoingTrips')}
+        >
           <Icon name="autorenew" size={32} color="#FF9800" />
           <Text style={styles.overviewValue}>{stats.ongoingTrips}</Text>
           <Text style={styles.overviewLabel}>Live Trips</Text>
-        </View>
-        <View style={[styles.overviewCard, { backgroundColor: '#F3E5F5' }]}>
+          <Icon name="chevron-right" size={20} color="#FF9800" style={styles.cardArrow} />
+        </TouchableOpacity>
+
+        {/* Completed Trips - Clickable */}
+        <TouchableOpacity 
+          style={[styles.overviewCard, { backgroundColor: '#F3E5F5' }]}
+          onPress={() => handleCardPress('completedTrips')}
+        >
           <Icon name="check-circle" size={32} color="#9C27B0" />
           <Text style={styles.overviewValue}>{stats.completedTrips}</Text>
           <Text style={styles.overviewLabel}>Completed</Text>
-        </View>
+          <Icon name="chevron-right" size={20} color="#9C27B0" style={styles.cardArrow} />
+        </TouchableOpacity>
       </View>
       
       <Text style={styles.sectionSubtitle}>Quick Actions</Text>
@@ -983,6 +1457,7 @@ const TransporterDashboard = ()=> {
       </View>
     </ScrollView>
   );
+};
 
   // ... Keep all your other section components exactly as they were ...
  const PollSection = () => (
@@ -1169,68 +1644,624 @@ const ResponsesSection = () => (
     )}
   </ScrollView>
 );
-const RouteSchedulingSection = () => (
-  <ScrollView style={styles.section}>
-    <Text style={styles.sectionTitle}>Route Scheduling</Text>
-    <View style={styles.card}>
-      <TextInput 
-        style={styles.input} 
-        placeholder="Route Name" 
-        value={newRoute.name} 
-        onChangeText={text => setNewRoute({ ...newRoute, name: text })} 
-      />
-      <TextInput 
-        style={[styles.input, styles.textArea]} 
-        placeholder="Stops (one per line)" 
-        value={newRoute.stops} 
-        onChangeText={text => setNewRoute({ ...newRoute, stops: text })} 
-        multiline 
-      />
-      <TouchableOpacity style={styles.primaryBtn} onPress={createRoute}>
-        <Text style={styles.primaryBtnText}>Create Route</Text>
-      </TouchableOpacity>
-    </View>
+const RouteSchedulingSection = () => {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingRoute, setEditingRoute] = useState(null);
+  const [availablePassengers, setAvailablePassengers] = useState([]);
+  const [selectedPassengers, setSelectedPassengers] = useState([]);
+  const [optimizedRoute, setOptimizedRoute] = useState(null);
+  const [newRoute, setNewRoute] = useState({ 
+    name: '', 
+    stops: '', 
+    distance: '', 
+    duration: '' 
+  });
+
+  // Load data on component mount
+  useEffect(() => {
+    loadAvailablePassengers();
+  }, []);
+
+  const loadAvailablePassengers = async () => {
+    try {
+      const passengers = await apiService.getPassengers();
+      const available = passengers.filter(p => 
+        p.status === 'active' && p.selectedTimeSlot
+      );
+      setAvailablePassengers(available);
+    } catch (error) {
+      console.error('Error loading passengers:', error);
+      Alert.alert('Error', 'Failed to load passengers');
+    }
+  };
+
+  // CREATE ROUTE FUNCTION
+  const createRoute = async () => {
+    if (!newRoute.name || !newRoute.stops) {
+      Alert.alert('Error', 'Please fill route name and stops');
+      return;
+    }
+
+    try {
+      const routeData = {
+        name: newRoute.name,
+        stops: newRoute.stops.split('\n').filter(s => s.trim()),
+        distance: newRoute.distance || '0 km',
+        duration: newRoute.duration || '0 min',
+        destination: 'Gulberg Greens'
+      };
+
+      const createdRoute = await apiService.createRoute(routeData);
+      
+      // Reset form
+      setNewRoute({ name: '', stops: '', distance: '', duration: '' });
+      setShowCreateForm(false);
+      
+      // Reload routes
+      await loadRoutes();
+      
+      Alert.alert('Success', 'Route created successfully');
+    } catch (error) {
+      console.error('Create route error:', error);
+      Alert.alert('Error', 'Failed to create route');
+    }
+  };
+
+  // UPDATE ROUTE FUNCTION
+  const handleUpdateRoute = async () => {
+    if (!editingRoute || !newRoute.name || !newRoute.stops) {
+      Alert.alert('Error', 'Please fill all fields');
+      return;
+    }
+
+    try {
+      const routeData = {
+        name: newRoute.name,
+        stops: newRoute.stops.split('\n').filter(s => s.trim()),
+        distance: newRoute.distance,
+        duration: newRoute.duration
+      };
+
+      await apiService.updateRoute(editingRoute._id, routeData);
+      
+      // Reset states
+      setEditingRoute(null);
+      setNewRoute({ name: '', stops: '', distance: '', duration: '' });
+      setShowCreateForm(false);
+      
+      // Reload routes
+      await loadRoutes();
+      
+      Alert.alert('Success', 'Route updated successfully');
+    } catch (error) {
+      console.error('Update route error:', error);
+      Alert.alert('Error', 'Failed to update route');
+    }
+  };
+
+  // DELETE ROUTE FUNCTION
+  // In your RouteSchedulingSection component, update the deleteRoute function:
+
+const deleteRoute = async (routeId) => {
+  Alert.alert(
+    "Delete Route",
+    "Are you sure you want to delete this route?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            console.log('Deleting route:', routeId);
+            await apiService.deleteRoute(routeId);
+            
+            // Remove from local state immediately for better UX
+            setRoutes(prev => prev.filter(route => route._id !== routeId));
+            
+            Alert.alert("Success", "Route deleted successfully");
+          } catch (error) {
+            console.error('Delete route error:', error);
+            Alert.alert("Error", "Failed to delete route");
+          }
+        }
+      }
+    ]
+  );
+};
+  // AI ROUTE OPTIMIZATION FUNCTIONS
+  const generateOptimizedRoute = () => {
+    if (selectedPassengers.length === 0) {
+      Alert.alert('Error', 'Please select passengers for route optimization');
+      return;
+    }
+
+    const selectedPassengerData = availablePassengers.filter(p => 
+      selectedPassengers.includes(p._id)
+    );
+
+    const optimized = optimizeRouteWithAI(selectedPassengerData);
+    setOptimizedRoute(optimized);
+    setNewRoute(prev => ({
+      ...prev,
+      name: optimized.name,
+      stops: optimized.stops.join('\n'),
+      distance: optimized.distance,
+      duration: optimized.duration
+    }));
+  };
+
+  const optimizeRouteWithAI = (passengers) => {
+    const stopCoords = {
+      'Chaklala Bus Stop': { lat: 33.6008, lng: 73.0963 },
+      'Korang Road': { lat: 33.583, lng: 73.1 },
+      'Scheme 3': { lat: 33.5858, lng: 73.0887 },
+      'PWD Housing': { lat: 33.571, lng: 73.145 },
+      'I-10 Markaz': { lat: 33.6476, lng: 73.0388 },
+      'G-11 Markaz': { lat: 33.6686, lng: 72.998 }
+    };
+
+    // Group by time slot
+    const timeSlotGroups = {};
+    passengers.forEach(passenger => {
+      const timeSlot = passenger.selectedTimeSlot || 'Not Selected';
+      if (!timeSlotGroups[timeSlot]) {
+        timeSlotGroups[timeSlot] = [];
+      }
+      timeSlotGroups[timeSlot].push(passenger);
+    });
+
+    // Get main time slot
+    const mainTimeSlot = Object.keys(timeSlotGroups).reduce((a, b) => 
+      timeSlotGroups[a].length > timeSlotGroups[b].length ? a : b
+    );
+
+    const mainPassengers = timeSlotGroups[mainTimeSlot];
     
-    <Text style={styles.sectionSubtitle}>Existing Routes</Text>
-    {routes.length > 0 ? routes.map(route => (
-      <View key={route._id || route.id} style={styles.routeCard}>
-        <Text style={styles.routeName}>{route.name}</Text>
-        <View style={styles.stopsContainer}>
-          {route.stops?.map((stop, i) => (
-            <View key={i} style={styles.stopItem}>
-              <View style={styles.stopDot} />
-              <Text style={styles.stopText}>{stop}</Text>
+    // Calculate optimal route
+    const stops = calculateOptimalStops(mainPassengers, stopCoords);
+    const totalDistance = calculateTotalDistance(stops, stopCoords);
+    const totalTime = calculateEstimatedTime(totalDistance);
+
+    return {
+      name: `AI Optimized Route - ${mainTimeSlot}`,
+      stops: stops,
+      distance: `${totalDistance.toFixed(1)} km`,
+      duration: `${totalTime} min`,
+      timeSlot: mainTimeSlot,
+      passengers: mainPassengers.map(p => p._id),
+      efficiency: '95%',
+      totalPassengers: mainPassengers.length
+    };
+  };
+
+  const calculateOptimalStops = (passengers, coords) => {
+    if (passengers.length === 0) return [];
+    
+    const stops = [...new Set(passengers.map(p => p.pickupPoint))];
+    
+    // Nearest neighbor algorithm
+    const visited = new Set();
+    const optimalRoute = [];
+    
+    if (stops.length > 0) {
+      let currentStop = stops[0];
+      optimalRoute.push(currentStop);
+      visited.add(currentStop);
+      
+      while (visited.size < stops.length) {
+        let nearestStop = null;
+        let minDistance = Infinity;
+        
+        stops.forEach(stop => {
+          if (!visited.has(stop) && coords[currentStop] && coords[stop]) {
+            const distance = calculateDistance(
+              coords[currentStop].lat, coords[currentStop].lng,
+              coords[stop].lat, coords[stop].lng
+            );
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearestStop = stop;
+            }
+          }
+        });
+        
+        if (nearestStop) {
+          optimalRoute.push(nearestStop);
+          visited.add(nearestStop);
+          currentStop = nearestStop;
+        } else {
+          break;
+        }
+      }
+    }
+    
+    return optimalRoute;
+  };
+
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const calculateTotalDistance = (stops, coords) => {
+    let total = 0;
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (coords[stops[i]] && coords[stops[i+1]]) {
+        total += calculateDistance(
+          coords[stops[i]].lat, coords[stops[i]].lng,
+          coords[stops[i+1]].lat, coords[stops[i+1]].lng
+        );
+      }
+    }
+    return total;
+  };
+
+  const calculateEstimatedTime = (distance) => {
+    return Math.round((distance / 40) * 60);
+  };
+
+  // EDIT ROUTE FUNCTION
+  const updateRoute = (route) => {
+    setEditingRoute(route);
+    setNewRoute({
+      name: route.name,
+      stops: Array.isArray(route.stops) ? route.stops.join('\n') : '',
+      distance: route.distance || '',
+      duration: route.duration || ''
+    });
+    setShowCreateForm(true);
+  };
+
+  // TOGGLE PASSENGER SELECTION
+  const togglePassengerSelection = (passengerId) => {
+    setSelectedPassengers(prev => 
+      prev.includes(passengerId)
+        ? prev.filter(id => id !== passengerId)
+        : [...prev, passengerId]
+    );
+  };
+
+  // RESET FORM
+  const resetForm = () => {
+    setShowCreateForm(false);
+    setEditingRoute(null);
+    setNewRoute({ name: '', stops: '', distance: '', duration: '' });
+    setOptimizedRoute(null);
+    setSelectedPassengers([]);
+  };
+
+  return (
+    <ScrollView style={styles.section}>
+      <Text style={styles.sectionTitle}>Route Scheduling</Text>
+
+      {/* AI Route Optimization Section */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>🤖 AI Route Optimizer</Text>
+        <Text style={styles.cardDescription}>
+          Select passengers to generate optimized routes based on their locations and time slots
+        </Text>
+
+        <Text style={styles.inputLabel}>Available Passengers:</Text>
+        
+        {availablePassengers.length > 0 ? (
+          Object.entries(
+            availablePassengers.reduce((groups, passenger) => {
+              const timeSlot = passenger.selectedTimeSlot || 'Not Selected';
+              if (!groups[timeSlot]) groups[timeSlot] = [];
+              groups[timeSlot].push(passenger);
+              return groups;
+            }, {})
+          ).map(([timeSlot, passengers]) => (
+            <View key={timeSlot} style={styles.timeSlotGroup}>
+              <Text style={styles.timeSlotTitle}>{timeSlot} ({passengers.length} passengers)</Text>
+              {passengers.map(passenger => (
+                <TouchableOpacity
+                  key={passenger._id}
+                  style={[
+                    styles.passengerOption,
+                    selectedPassengers.includes(passenger._id) && styles.passengerSelected
+                  ]}
+                  onPress={() => togglePassengerSelection(passenger._id)}
+                >
+                  <View style={[
+                    styles.passengerCheckbox,
+                    selectedPassengers.includes(passenger._id) && styles.passengerCheckboxSelected
+                  ]}>
+                    {selectedPassengers.includes(passenger._id) && (
+                      <Icon name="check" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <View style={styles.passengerInfo}>
+                    <Text style={styles.passengerName}>{passenger.name}</Text>
+                    <Text style={styles.passengerLocation}>{passenger.pickupPoint}</Text>
+                  </View>
+                  <Text style={styles.passengerTime}>{passenger.selectedTimeSlot}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          ))}
-          <View style={styles.stopItem}>
-            <View style={[styles.stopDot, styles.destinationDot]} />
-            <Text style={[styles.stopText, styles.destinationText]}>{route.destination}</Text>
-          </View>
-        </View>
-        <View style={styles.routeInfo}>
-          <Text style={styles.routeInfoText}>{route.distance}</Text>
-          <Text style={styles.routeInfoText}>{route.duration}</Text>
-        </View>
-        {route.assignedDriver && (
-          <View style={styles.assignedDriverBadge}>
-            <Text style={styles.assignedDriverText}>
-              Driver: {typeof route.assignedDriver === 'object' ? route.assignedDriver.name : route.assignedDriver}
-            </Text>
-            <Text style={styles.assignedDriverText}>Time: {route.timeSlot}</Text>
-            <Text style={styles.assignedDriverText}>
-              Passengers: {route.passengers?.length || 0}
-            </Text>
+          ))
+        ) : (
+          <Text style={styles.noPassengersText}>No available passengers found</Text>
+        )}
+
+        <TouchableOpacity 
+          style={[
+            styles.primaryBtn, 
+            selectedPassengers.length === 0 && styles.disabledBtn
+          ]}
+          onPress={generateOptimizedRoute}
+          disabled={selectedPassengers.length === 0}
+        >
+          <Icon name="psychology" size={20} color="#fff" />
+          <Text style={styles.primaryBtnText}>Generate AI Optimized Route</Text>
+        </TouchableOpacity>
+
+        {optimizedRoute && (
+          <View style={styles.optimizedRouteCard}>
+            <Text style={styles.optimizedTitle}>🚀 AI Optimized Route</Text>
+            <View style={styles.optimizedStats}>
+              <View style={styles.optimizedStat}>
+                <Text style={styles.optimizedStatValue}>{optimizedRoute.totalPassengers}</Text>
+                <Text style={styles.optimizedStatLabel}>Passengers</Text>
+              </View>
+              <View style={styles.optimizedStat}>
+                <Text style={styles.optimizedStatValue}>{optimizedRoute.distance}</Text>
+                <Text style={styles.optimizedStatLabel}>Distance</Text>
+              </View>
+              <View style={styles.optimizedStat}>
+                <Text style={styles.optimizedStatValue}>{optimizedRoute.duration}</Text>
+                <Text style={styles.optimizedStatLabel}>Time</Text>
+              </View>
+              <View style={styles.optimizedStat}>
+                <Text style={styles.optimizedStatValue}>{optimizedRoute.efficiency}</Text>
+                <Text style={styles.optimizedStatLabel}>Efficiency</Text>
+              </View>
+            </View>
+            <Text style={styles.optimizedStopsTitle}>Optimized Stops:</Text>
+            {optimizedRoute.stops.map((stop, index) => (
+              <View key={index} style={styles.optimizedStop}>
+                <Text style={styles.stopNumber}>{index + 1}</Text>
+                <Text style={styles.stopName}>{stop}</Text>
+              </View>
+            ))}
+            <TouchableOpacity 
+              style={styles.useRouteBtn}
+              onPress={() => setShowCreateForm(true)}
+            >
+              <Text style={styles.useRouteBtnText}>Use This Route</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
-    )) : (
-      <View style={styles.emptyState}>
-        <Icon name="map" size={48} color="#999" />
-        <Text style={styles.emptyText}>No routes created</Text>
+
+      {/* Create/Edit Route Form */}
+      <View style={styles.card}>
+        <View style={styles.formHeader}>
+          <Text style={styles.cardTitle}>
+            {editingRoute ? 'Edit Route' : 'Create New Route'}
+          </Text>
+          <TouchableOpacity onPress={resetForm}>
+            <Text style={styles.toggleFormText}>
+              {showCreateForm ? 'Cancel' : 'Create Route'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showCreateForm && (
+          <>
+            <TextInput 
+              style={styles.input} 
+              placeholder="Route Name" 
+              value={newRoute.name} 
+              onChangeText={text => setNewRoute({ ...newRoute, name: text })} 
+            />
+            <TextInput 
+              style={[styles.input, styles.textArea]} 
+              placeholder="Stops (one per line)" 
+              value={newRoute.stops} 
+              onChangeText={text => setNewRoute({ ...newRoute, stops: text })} 
+              multiline 
+              numberOfLines={4}
+            />
+            <View style={styles.distanceDurationRow}>
+              <TextInput 
+                style={[styles.input, styles.halfInput]} 
+                placeholder="Distance (km)" 
+                value={newRoute.distance} 
+                onChangeText={text => setNewRoute({ ...newRoute, distance: text })} 
+                keyboardType="numeric"
+              />
+              <TextInput 
+                style={[styles.input, styles.halfInput]} 
+                placeholder="Duration (min)" 
+                value={newRoute.duration} 
+                onChangeText={text => setNewRoute({ ...newRoute, duration: text })} 
+                keyboardType="numeric"
+              />
+            </View>
+            
+            {editingRoute ? (
+              <View style={styles.formActions}>
+                <TouchableOpacity 
+                  style={[styles.primaryBtn, styles.updateBtn]} 
+                  onPress={handleUpdateRoute}
+                >
+                  <Text style={styles.primaryBtnText}>Update Route</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.primaryBtn, styles.cancelBtn]} 
+                  onPress={resetForm}
+                >
+                  <Text style={styles.primaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.primaryBtn} onPress={createRoute}>
+                <Text style={styles.primaryBtnText}>Create Route</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </View>
-    )}
-  </ScrollView>
-);
+      
+      <Text style={styles.sectionSubtitle}>Existing Routes</Text>
+      
+      {routes.length > 0 ? routes.map(route => (
+        <View key={route._id} style={styles.routeCard}>
+          <View style={styles.routeHeader}>
+            <Text style={styles.routeName}>{route.name}</Text>
+            <View style={styles.routeActions}>
+              <TouchableOpacity 
+                style={styles.actionBtn}
+                onPress={() => updateRoute(route)}
+              >
+                <Icon name="edit" size={18} color="#2196F3" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.actionBtn}
+                onPress={() => deleteRoute(route._id)}
+              >
+                <Icon name="delete" size={18} color="#f44336" />
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          <View style={styles.stopsContainer}>
+            {route.stops?.map((stop, i) => (
+              <View key={i} style={styles.stopItem}>
+                <View style={styles.stopDot} />
+                <Text style={styles.stopText}>{stop}</Text>
+              </View>
+            ))}
+            <View style={styles.stopItem}>
+              <View style={[styles.stopDot, styles.destinationDot]} />
+              <Text style={[styles.stopText, styles.destinationText]}>
+                {route.destination || 'Gulberg Greens'}
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.routeInfo}>
+            <Text style={styles.routeInfoText}>{route.distance}</Text>
+            <Text style={styles.routeInfoText}>{route.duration}</Text>
+          </View>
+          
+          {route.assignedDriver && (
+            <View style={styles.assignedDriverBadge}>
+              <Text style={styles.assignedDriverText}>
+                Driver: {typeof route.assignedDriver === 'object' ? route.assignedDriver.name : route.assignedDriver}
+              </Text>
+              <Text style={styles.assignedDriverText}>Time: {route.timeSlot}</Text>
+              <Text style={styles.assignedDriverText}>
+                Passengers: {route.passengers?.length || 0}
+              </Text>
+            </View>
+          )}
+        </View>
+      )) : (
+        <View style={styles.emptyState}>
+          <Icon name="map" size={48} color="#999" />
+          <Text style={styles.emptyText}>No routes created</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+};
+// Helper functions for driver assignment
+const getDriversByTimeSlot = (timeSlot) => {
+  return driverAvailability.filter(driver => 
+    driver.status === 'Available' && 
+    driver.availableTimeSlots?.includes(timeSlot)
+  );
+};
+
+const getPassengersByTimeSlot = (timeSlot) => {
+  return passengerResponses.filter(passenger => 
+    passenger.status === 'Confirmed' && 
+    passenger.selectedTimeSlot === timeSlot
+  );
+};
+
+// Auto-assignment functions
+const handleAutoAssignment = async () => {
+  try {
+    const assignments = await apiService.generateAutoAssignments();
+    setAutoAssignments(assignments.assigned || []);
+    setUnassignedInAuto(assignments.unassigned || []);
+    Alert.alert('Success', 'Auto-assignments generated successfully');
+  } catch (error) {
+    console.error('Auto-assignment error:', error);
+    Alert.alert('Error', 'Failed to generate auto-assignments');
+  }
+};
+
+const handleApproveAutoRoute = async (index) => {
+  try {
+    const assignment = autoAssignments[index];
+    
+    // Convert the auto-assignment to a manual assignment
+    const assignmentData = {
+      routeId: assignment.routeId,
+      driverId: assignment.driver.id,
+      timeSlot: assignment.timeSlot,
+      passengerIds: assignment.passengers.map(p => p._id || p.id),
+    };
+
+    await apiService.assignDriver(assignmentData);
+    
+    // Update the assignment status
+    const updatedAssignments = [...autoAssignments];
+    updatedAssignments[index] = { ...updatedAssignments[index], status: 'approved' };
+    setAutoAssignments(updatedAssignments);
+    
+    // Reload data
+    await loadRoutes();
+    await loadDrivers();
+    await loadTrips();
+    
+    Alert.alert('Success', 'Route approved and assigned');
+  } catch (error) {
+    Alert.alert('Error', 'Failed to approve route');
+  }
+};
+
+const handleApproveAllAutoRoutes = async () => {
+  try {
+    const pendingAssignments = autoAssignments.filter(a => a.status !== 'approved');
+    
+    for (const assignment of pendingAssignments) {
+      const assignmentData = {
+        routeId: assignment.routeId,
+        driverId: assignment.driver.id,
+        timeSlot: assignment.timeSlot,
+        passengerIds: assignment.passengers.map(p => p._id || p.id),
+      };
+      
+      await apiService.assignDriver(assignmentData);
+    }
+    
+    // Mark all as approved
+    const updatedAssignments = autoAssignments.map(a => ({ ...a, status: 'approved' }));
+    setAutoAssignments(updatedAssignments);
+    
+    // Reload data
+    await loadRoutes();
+    await loadDrivers();
+    await loadTrips();
+    
+    Alert.alert('Success', 'All routes approved and assigned');
+  } catch (error) {
+    Alert.alert('Error', 'Failed to approve all routes');
+  }
+};
 const AssignDriversSection = () => (
   <ScrollView style={styles.section}>
     <View style={styles.assignModeSelector}>
@@ -1794,12 +2825,63 @@ const LiveTrackingSection = () => {
     </ScrollView>
   );
 };
+const handleDriverRequest = async (requestId, action) => {
+  try {
+    const request = driverRequests.find(req => req._id === requestId);
+    
+    if (action === 'accept') {
+      await apiService.approveDriverRequest(requestId);
+      
+      // Email send करें
+      if (request && request.email) {
+        await sendAcceptanceEmail(request.email, 'driver', request.name);
+      }
+      
+      // Request को list से remove करें
+      setDriverRequests(prev => prev.filter(req => req._id !== requestId));
+      
+      // Driver को active drivers में add करें
+      const newDriver = {
+        _id: request._id,
+        name: request.name,
+        email: request.email,
+        phone: request.phone,
+        vehicle: request.vehicle,
+        capacity: request.capacity,
+        status: 'Available',
+        availableTimeSlots: request.availableTimeSlots || [],
+        license: request.license,
+        experience: request.experience
+      };
+      
+      setDriverAvailability(prev => [...prev, newDriver]);
+      
+      // Stats update
+      setStats(prev => ({
+        ...prev,
+        activeDrivers: prev.activeDrivers + 1
+      }));
+      
+      Alert.alert('Success', 'Driver request accepted and added to active drivers');
+    } else {
+      await apiService.rejectDriverRequest(requestId);
+      // Request को list से remove करें
+      setDriverRequests(prev => prev.filter(req => req._id !== requestId));
+      Alert.alert('Rejected', 'Driver request rejected');
+    }
+    
+    await loadStats();
+  } catch (error) {
+    Alert.alert('Error', `Failed to ${action} driver request`);
+  }
+};
 const DriverRequestsSection = () => (
   <ScrollView style={styles.section}>
     <Text style={styles.sectionTitle}>Driver Join Requests</Text>
     {driverRequests.length > 0 ? driverRequests.map(request => (
       <View key={request._id} style={styles.requestCard}>
         <Text style={styles.requestName}>{request.name}</Text>
+        <Text style={styles.requestDetail}>Email: {request.email}</Text>
         <Text style={styles.requestDetail}>Vehicle: {request.vehicle}</Text>
         <Text style={styles.requestDetail}>Capacity: {request.capacity}</Text>
         <Text style={styles.requestDetail}>Experience: {request.experience}</Text>
@@ -2001,7 +3083,126 @@ const PaymentsSection = () => (
       </>
     )}
   </ScrollView>
-);
+);const CompletedTripsList = ({ onClose }) => {
+  const [completedTrips, setCompletedTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadCompletedTrips();
+  }, []);
+
+  const loadCompletedTrips = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getCompletedTrips();
+      setCompletedTrips(response.trips || []);
+    } catch (error) {
+      console.error('Error loading completed trips:', error);
+      Alert.alert('Error', 'Failed to load completed trips');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.listContainer}>
+        <View style={styles.listHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <Icon name="arrow-back" size={24} color={COLORS.black} />
+          </TouchableOpacity>
+          <Text style={styles.listTitle}>Completed Trips</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading completed trips...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.listContainer}>
+      <View style={styles.listHeader}>
+        <TouchableOpacity onPress={onClose} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color={COLORS.black} />
+        </TouchableOpacity>
+        <Text style={styles.listTitle}>Completed Trips ({completedTrips.length})</Text>
+        <TouchableOpacity onPress={loadCompletedTrips} style={styles.refreshButton}>
+          <Icon name="refresh" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.listContent}>
+        {completedTrips.length > 0 ? (
+          completedTrips.map(trip => (
+            <View key={trip._id} style={styles.completedTripCard}>
+              <View style={styles.tripHeader}>
+                <View style={styles.tripIcon}>
+                  <Icon name="check-circle" size={24} color={COLORS.success} />
+                </View>
+                <View style={styles.tripInfo}>
+                  <Text style={styles.tripName}>
+                    {trip.driverId?.name || 'Unknown Driver'} 
+                  </Text>
+                  <Text style={styles.tripRoute}>
+                    {trip.routeId?.name || 'Unknown Route'}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, styles.completedBadge]}>
+                  <Text style={styles.statusText}>COMPLETED</Text>
+                </View>
+              </View>
+              
+              <View style={styles.tripDetails}>
+                <View style={styles.tripDetailRow}>
+                  <View style={styles.tripDetailItem}>
+                    <Icon name="people" size={14} color={COLORS.gray} />
+                    <Text style={styles.tripDetailText}>
+                      {trip.passengers?.length || 0} passengers
+                    </Text>
+                  </View>
+                  <View style={styles.tripDetailItem}>
+                    <Icon name="schedule" size={14} color={COLORS.gray} />
+                    <Text style={styles.tripDetailText}>
+                      Completed: {new Date(trip.updatedAt || trip.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.tripDetailRow}>
+                  <View style={styles.tripDetailItem}>
+                    <Icon name="location-pin" size={14} color={COLORS.gray} />
+                    <Text style={styles.tripDetailText}>
+                      Route: {trip.routeId?.stops?.join(' → ') || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.completedTripActions}>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="receipt" size={16} color={COLORS.primary} />
+                  <Text style={styles.actionText}>View Details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="star" size={16} color={COLORS.warning} />
+                  <Text style={styles.actionText}>Rate Trip</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Icon name="check-circle" size={64} color={COLORS.gray} />
+            <Text style={styles.emptyText}>No completed trips</Text>
+            <Text style={styles.emptySubtext}>Completed trips will appear here</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
 const ComplaintsSection = () => (
   <ScrollView style={styles.section}>
     <Text style={styles.sectionTitle}>Complaints Management</Text>
@@ -4258,7 +5459,28 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontWeight: '600',
   },
-  
+  // یہ نئے styles اپنے existing styles میں شامل کریں
+passengerCheckboxSelected: {
+  backgroundColor: COLORS.primary,
+  borderColor: COLORS.primary,
+},
+noPassengersText: {
+  textAlign: 'center',
+  color: COLORS.gray,
+  fontStyle: 'italic',
+  padding: 16,
+},
+useRouteBtn: {
+  backgroundColor: COLORS.primary,
+  padding: 12,
+  borderRadius: 8,
+  alignItems: 'center',
+  marginTop: 12,
+},
+useRouteBtnText: {
+  color: '#fff',
+  fontWeight: '600',
+},
   complaintDesc: {
     fontSize: 15,
     color: COLORS.darkGray,

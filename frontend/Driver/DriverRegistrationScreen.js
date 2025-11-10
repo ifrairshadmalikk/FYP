@@ -1,4 +1,4 @@
-// DriverRegistrationScreen.js (Updated)
+// DriverRegistrationScreen.js - Updated with approval flow
 import React, { useState } from "react";
 import { 
   View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Image, ActivityIndicator 
@@ -78,17 +78,14 @@ const DriverRegistrationScreen = ({ navigation }) => {
     try {
       const response = await authAPI.register(form);
       
-      if (response.data.success) {
+      if (response.success) {
         Alert.alert(
-          "Registration Successful",
-          "Your account has been created successfully! You can now login.",
-          [
-            {
-              text: "OK",
-              onPress: () => navigation.navigate("DriverLogin")
-            }
-          ]
+          "Registration Submitted Successfully!",
+          "Your driver registration has been submitted. You will receive an email notification once the transporter approves your account.",
+        
         );
+      } else {
+        Alert.alert("Registration Error", response.message || "Registration failed. Please try again.");
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -126,7 +123,21 @@ const DriverRegistrationScreen = ({ navigation }) => {
     submitButtonText: { color: "#fff", fontWeight: "800", fontSize: 18 },
     stepIndicator: { flexDirection: 'row', justifyContent: 'center', marginBottom: 20 },
     step: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#d1d5db', marginHorizontal: 5 },
-    activeStep: { backgroundColor: '#afd826' }
+    activeStep: { backgroundColor: '#afd826' },
+    approvalNote: { 
+      backgroundColor: '#f0f9d8', 
+      padding: 16, 
+      borderRadius: 12, 
+      marginTop: 20,
+      borderLeftWidth: 4,
+      borderLeftColor: '#afd826'
+    },
+    approvalNoteText: { 
+      color: '#374151', 
+      fontSize: 14, 
+      textAlign: 'center',
+      fontWeight: '500'
+    }
   };
 
   return (
@@ -246,6 +257,14 @@ const DriverRegistrationScreen = ({ navigation }) => {
                 value={form.experience} 
                 onChangeText={(text) => handleChange("experience", text)} 
               />
+            </View>
+
+            {/* Approval Process Note */}
+            <View style={styles.approvalNote}>
+              <Text style={styles.approvalNoteText}>
+                📝 Note: Your registration will be reviewed by the transporter. 
+                You will receive an email notification once your account is approved.
+              </Text>
             </View>
           </>
         )}
