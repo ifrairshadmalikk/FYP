@@ -2,8 +2,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// اپنا IP address یہاں ڈالیں
-const BASE_URL = 'http://192.168.0.109:3001/api';
+
+const BASE_URL = 'http://192.168.0.109:3000/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -43,14 +43,27 @@ api.interceptors.response.use(
   }
 );
 
+
+   
+// apiService.js - Login function check
 export const authAPI = {
   login: (email, password) => 
-    api.post('/drivers/login', { email, password }),
+    api.post('/driver/login', { 
+      email: email.toLowerCase().trim(), 
+      password: password 
+    }),
   
   register: (driverData) => 
-    api.post('/drivers/register', driverData),
+    api.post('/driver/register', driverData),
 };
-
+// Add transporter APIs for managing driver requests
+export const transporterAPI = {
+  getDriverRequests: () => api.get('/transporter/driver-requests'),
+  approveDriverRequest: (requestId, transporterId, notes) => 
+    api.post('/transporter/approve-driver-request', { requestId, transporterId, notes }),
+  rejectDriverRequest: (requestId, transporterId, notes) => 
+    api.post('/transporter/reject-driver-request', { requestId, transporterId, notes }),
+};
 export const driverAPI = {
   getProfile: () => api.get('/drivers/profile'),
   updateProfile: (profileData) => api.put('/drivers/profile', profileData),
