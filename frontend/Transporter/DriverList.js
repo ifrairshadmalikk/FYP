@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,14 +13,112 @@ import {
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 
+// Google Maps API Key
+const GOOGLE_MAPS_API_KEY = "AIzaSyDiZhjAhYniDLe4Ndr1u87NdDfIdZS6SME";
+
+// Google Maps Service
+const googleMapsService = {
+  async getGeocodeFromAddress(address) {
+    try {
+      const encodedAddress = encodeURIComponent(address);
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+      
+      if (data.results && data.results[0]) {
+        const location = data.results[0].geometry.location;
+        return {
+          latitude: location.lat,
+          longitude: location.lng,
+          address: data.results[0].formatted_address,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error geocoding address:', error);
+      return null;
+    }
+  },
+
+  async getCurrentLocation() {
+    try {
+      // Get approximate Islamabad location
+      return {
+        latitude: 33.6844,
+        longitude: 73.0479,
+        address: "Islamabad, Pakistan"
+      };
+    } catch (error) {
+      console.error('Error getting location:', error);
+      return null;
+    }
+  },
+
+  async getDistanceFromUniversity(location) {
+    try {
+      const university = await this.getGeocodeFromAddress("Riphah International University I-14 Islamabad") || {
+        latitude: 33.6462,
+        longitude: 72.9834
+      };
+
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${location.latitude},${location.longitude}&destinations=${university.latitude},${university.longitude}&key=${GOOGLE_MAPS_API_KEY}`
+      );
+      
+      const data = await response.json();
+      
+      if (data.rows && data.rows[0] && data.rows[0].elements[0]) {
+        const element = data.rows[0].elements[0];
+        if (element.status === 'OK') {
+          return element.distance?.text || 'Unknown';
+        }
+      }
+      return 'Unknown';
+    } catch (error) {
+      console.error('Error getting distance:', error);
+      return 'Unknown';
+    }
+  },
+
+  async getETAFromUniversity(location) {
+    try {
+      const university = await this.getGeocodeFromAddress("Riphah International University I-14 Islamabad") || {
+        latitude: 33.6462,
+        longitude: 72.9834
+      };
+
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${location.latitude},${location.longitude}&destinations=${university.latitude},${university.longitude}&key=${GOOGLE_MAPS_API_KEY}`
+      );
+      
+      const data = await response.json();
+      
+      if (data.rows && data.rows[0] && data.rows[0].elements[0]) {
+        const element = data.rows[0].elements[0];
+        if (element.status === 'OK') {
+          return element.duration?.text || 'Unknown';
+        }
+      }
+      return 'Unknown';
+    } catch (error) {
+      console.error('Error getting ETA:', error);
+      return 'Unknown';
+    }
+  }
+};
+
 export default function DriverList({ navigation }) {
   const [expandedDriver, setExpandedDriver] = useState(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedRating, setSelectedRating] = useState("all");
   const [search, setSearch] = useState("");
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [drivers] = useState([
+  // Initial drivers data with addresses for Google Maps
+  const initialDrivers = [
     {
       id: 1,
       name: "Ali Khan",
@@ -32,7 +129,8 @@ export default function DriverList({ navigation }) {
       completedRides: 127,
       experience: "3 years",
       mobile: "0300-1234567",
-      vehicleType: "Sedan"
+      vehicleType: "Sedan",
+      address: "Blue Area Islamabad"
     },
     {
       id: 2,
@@ -44,7 +142,8 @@ export default function DriverList({ navigation }) {
       completedRides: 89,
       experience: "2 years",
       mobile: "0312-9876543",
-      vehicleType: "Sedan"
+      vehicleType: "Sedan",
+      address: "Gulberg Lahore"
     },
     {
       id: 3,
@@ -56,7 +155,8 @@ export default function DriverList({ navigation }) {
       completedRides: 156,
       experience: "4 years",
       mobile: "0333-1234567",
-      vehicleType: "Hatchback"
+      vehicleType: "Hatchback",
+      address: "DHA Phase 5 Lahore"
     },
     {
       id: 4,
@@ -68,14 +168,43 @@ export default function DriverList({ navigation }) {
       completedRides: 67,
       experience: "1 year",
       mobile: "0300-5551234",
-      vehicleType: "Hybrid"
+      vehicleType: "Hybrid",
+      address: "Johar Town Lahore"
     },
-  ]);
+  ];
 
-  // Filter options
-  const statusOptions = ["all", "available", "offline"];
-  const ratingOptions = ["all", "4.5+", "4.7+", "4.8+"];
-  const vehicleTypes = ["all", "Sedan", "Hatchback", "SUV", "Hybrid"];
+  // Load driver coordinates from Google Maps
+  useEffect(() => {
+    loadDriverCoordinates();
+  }, []);
+
+  const loadDriverCoordinates = async () => {
+    setLoading(true);
+    try {
+      const driversWithCoords = await Promise.all(
+        initialDrivers.map(async (driver) => {
+          const location = await googleMapsService.getGeocodeFromAddress(driver.address) || 
+            await googleMapsService.getCurrentLocation();
+          
+          const distance = await googleMapsService.getDistanceFromUniversity(location);
+          const eta = await googleMapsService.getETAFromUniversity(location);
+
+          return {
+            ...driver,
+            location,
+            distanceFromUniversity: distance,
+            etaToUniversity: eta
+          };
+        })
+      );
+      setDrivers(driversWithCoords);
+    } catch (error) {
+      console.error('Error loading driver data:', error);
+      setDrivers(initialDrivers);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Check if filters are active
   const isFilterActive = selectedStatus !== "all" || selectedRating !== "all";
@@ -89,20 +218,17 @@ export default function DriverList({ navigation }) {
 
   // Filter drivers
   const filteredDrivers = drivers.filter((driver) => {
-    // Search filter
     const matchesSearch =
       search === "" ||
       driver.name.toLowerCase().includes(search.toLowerCase()) ||
       driver.vehicle.toLowerCase().includes(search.toLowerCase()) ||
       driver.mobile.includes(search);
 
-    // Status filter
     const matchesStatus =
       selectedStatus === "all" ||
       (selectedStatus === "available" && driver.isAvailableToday) ||
       (selectedStatus === "offline" && !driver.isAvailableToday);
 
-    // Rating filter
     const matchesRating =
       selectedRating === "all" ||
       (selectedRating === "4.5+" && parseFloat(driver.rating) >= 4.5) ||
@@ -126,7 +252,18 @@ export default function DriverList({ navigation }) {
     }
   };
 
-  // Filter Modal Component
+  // View driver on map
+  const viewOnMap = (driver) => {
+    navigation.navigate('VanTracking', {
+      drivers: [{
+        ...driver,
+        currentLocation: driver.location,
+        route: [driver.location, { latitude: 33.6462, longitude: 72.9834 }]
+      }]
+    });
+  };
+
+  // Filter Modal
   const FilterModal = () => (
     <Modal
       visible={showFilterModal}
@@ -136,7 +273,6 @@ export default function DriverList({ navigation }) {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          {/* Modal Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filter Drivers</Text>
             <TouchableOpacity onPress={() => setShowFilterModal(false)}>
@@ -144,67 +280,54 @@ export default function DriverList({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Status Filter */}
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>📊 Status</Text>
-            <View style={styles.filterOptions}>
-              {statusOptions.map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.filterOption,
-                    selectedStatus === status && styles.selectedFilterOption
-                  ]}
-                  onPress={() => setSelectedStatus(status)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedStatus === status && styles.selectedFilterOptionText
-                  ]}>
-                    {status === "all" ? "All Status" : 
-                     status === "available" ? "🟢 Available" : "🔴 Offline"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {["all", "available", "offline"].map((status) => (
+              <TouchableOpacity
+                key={status}
+                style={[
+                  styles.filterOption,
+                  selectedStatus === status && styles.selectedFilterOption
+                ]}
+                onPress={() => setSelectedStatus(status)}
+              >
+                <Text style={[
+                  styles.filterOptionText,
+                  selectedStatus === status && styles.selectedFilterOptionText
+                ]}>
+                  {status === "all" ? "All Status" : 
+                   status === "available" ? "🟢 Available" : "🔴 Offline"}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          {/* Rating Filter */}
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>⭐ Rating</Text>
-            <View style={styles.filterOptions}>
-              {ratingOptions.map((rating) => (
-                <TouchableOpacity
-                  key={rating}
-                  style={[
-                    styles.filterOption,
-                    selectedRating === rating && styles.selectedFilterOption
-                  ]}
-                  onPress={() => setSelectedRating(rating)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedRating === rating && styles.selectedFilterOptionText
-                  ]}>
-                    {rating === "all" ? "All Ratings" : rating}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {["all", "4.5+", "4.7+", "4.8+"].map((rating) => (
+              <TouchableOpacity
+                key={rating}
+                style={[
+                  styles.filterOption,
+                  selectedRating === rating && styles.selectedFilterOption
+                ]}
+                onPress={() => setSelectedRating(rating)}
+              >
+                <Text style={[
+                  styles.filterOptionText,
+                  selectedRating === rating && styles.selectedFilterOptionText
+                ]}>
+                  {rating === "all" ? "All Ratings" : rating}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={clearFilters}
-            >
+            <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
               <Text style={styles.clearButtonText}>Clear All</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={() => setShowFilterModal(false)}
-            >
+            <TouchableOpacity style={styles.applyButton} onPress={() => setShowFilterModal(false)}>
               <Text style={styles.applyButtonText}>Show Results</Text>
             </TouchableOpacity>
           </View>
@@ -219,26 +342,20 @@ export default function DriverList({ navigation }) {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Drivers Management</Text>
-          <Text style={styles.headerSubtitle}>{filteredDrivers.length} drivers found</Text>
+          <Text style={styles.headerTitle}>Drivers</Text>
+          <Text style={styles.headerSubtitle}>{filteredDrivers.length} drivers</Text>
         </View>
-        <TouchableOpacity 
-          style={[styles.filterButton, isFilterActive && styles.activeFilterButton]}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Ionicons name="options" size={20} color={isFilterActive ? "#afd826" : "#fff"} />
+        <TouchableOpacity onPress={() => setShowFilterModal(true)}>
+          <Ionicons name="options" size={20} color="#fff" />
           {isFilterActive && <View style={styles.filterIndicator} />}
         </TouchableOpacity>
       </View>
 
-      {/* Stats Overview */}
+      {/* Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{drivers.length}</Text>
@@ -251,159 +368,96 @@ export default function DriverList({ navigation }) {
           </Text>
           <Text style={styles.statLabel}>Available</Text>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {drivers.filter(d => !d.isAvailableToday).length}
-          </Text>
-          <Text style={styles.statLabel}>Offline</Text>
-        </View>
       </View>
 
-      {/* Search Bar */}
+      {/* Search */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color="#999" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search drivers by name, vehicle..."
+          placeholder="Search drivers..."
           value={search}
           onChangeText={setSearch}
           placeholderTextColor="#999"
         />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={18} color="#999" />
-          </TouchableOpacity>
-        )}
       </View>
 
-      {/* Active Filters */}
-      {isFilterActive && (
-        <View style={styles.activeFiltersContainer}>
-          <Text style={styles.activeFiltersText}>Filters:</Text>
-          {selectedStatus !== "all" && (
-            <View style={styles.activeFilterTag}>
-              <Text style={styles.activeFilterText}>
-                {selectedStatus === "available" ? "🟢 Available" : "🔴 Offline"}
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedStatus("all")}>
-                <Ionicons name="close" size={14} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          )}
-          {selectedRating !== "all" && (
-            <View style={styles.activeFilterTag}>
-              <Text style={styles.activeFilterText}>⭐ {selectedRating}</Text>
-              <TouchableOpacity onPress={() => setSelectedRating("all")}>
-                <Ionicons name="close" size={14} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          )}
-          <TouchableOpacity onPress={clearFilters} style={styles.clearAllButton}>
-            <Text style={styles.clearAllText}>Clear All</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Drivers List */}
+      <ScrollView style={styles.container}>
         {filteredDrivers.map((driver) => (
           <TouchableOpacity
             key={driver.id}
-            style={[
-              styles.card,
-              expandedDriver === driver.id && styles.expandedCard
-            ]}
-            activeOpacity={0.8}
+            style={styles.card}
             onPress={() => toggleDriver(driver.id)}
           >
-            {/* Driver Header */}
             <View style={styles.cardHeader}>
-              <View style={styles.driverInfo}>
-                <Image
-                  source={{
-                    uri: "https://ui-avatars.com/api/?name=" + encodeURIComponent(driver.name) + "&background=afd826&color=fff&size=100&bold=true",
-                  }}
-                  style={styles.avatar}
-                />
-                <View style={styles.nameContainer}>
-                  <Text style={styles.driverName}>{driver.name}</Text>
-                  <View style={styles.ratingContainer}>
-                    <Ionicons name="star" size={14} color="#FFD700" />
-                    <Text style={styles.rating}>{driver.rating}</Text>
-                    <Text style={styles.rides}>({driver.completedRides} rides)</Text>
-                  </View>
-                </View>
+              <Image
+                source={{ uri: `https://ui-avatars.com/api/?name=${driver.name}&background=afd826&color=fff` }}
+                style={styles.avatar}
+              />
+              <View style={styles.nameContainer}>
+                <Text style={styles.driverName}>{driver.name}</Text>
+                <Text style={styles.rating}>⭐ {driver.rating} ({driver.completedRides} rides)</Text>
               </View>
-
               <View style={[
                 styles.availabilityBadge,
                 driver.isAvailableToday ? styles.availableBadge : styles.offlineBadge
               ]}>
-                <Ionicons
-                  name={driver.isAvailableToday ? "checkmark-circle" : "time"}
-                  size={12}
-                  color="#fff"
-                />
                 <Text style={styles.availabilityText}>
-                  {driver.isAvailableToday ? "Available" : "Offline"}
+                  {driver.isAvailableToday ? "🟢 Available" : "🔴 Offline"}
                 </Text>
               </View>
             </View>
 
-            {/* Basic Info */}
             <View style={styles.basicInfo}>
-              <View style={styles.infoRow}>
-                <View style={styles.infoItem}>
-                  <MaterialIcons name={getVehicleIcon(driver.vehicleType)} size={16} color="#666" />
-                  <Text style={styles.infoText}>{driver.vehicle}</Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Ionicons name="time-outline" size={16} color="#666" />
-                  <Text style={styles.infoText}>{driver.availability}</Text>
-                </View>
-              </View>
+              <Text style={styles.infoText}>
+                <MaterialIcons name={getVehicleIcon(driver.vehicleType)} size={14} /> {driver.vehicle}
+              </Text>
+              <Text style={styles.infoText}>
+                <Ionicons name="time-outline" size={14} /> {driver.availability}
+              </Text>
             </View>
 
-            {/* Expanded Details */}
             {expandedDriver === driver.id && (
               <View style={styles.expandedSection}>
                 <View style={styles.detailRow}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Experience</Text>
-                    <Text style={styles.detailValue}>{driver.experience}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Mobile</Text>
-                    <Text style={styles.detailValue}>{driver.mobile}</Text>
-                  </View>
+                  <Text style={styles.detailLabel}>Experience</Text>
+                  <Text style={styles.detailValue}>{driver.experience}</Text>
                 </View>
-
                 <View style={styles.detailRow}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Vehicle Type</Text>
-                    <Text style={styles.detailValue}>{driver.vehicleType}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Total Rides</Text>
-                    <Text style={styles.detailValue}>{driver.completedRides}</Text>
-                  </View>
+                  <Text style={styles.detailLabel}>Mobile</Text>
+                  <Text style={styles.detailValue}>{driver.mobile}</Text>
                 </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Location</Text>
+                  <Text style={styles.detailValue}>{driver.address}</Text>
+                </View>
+                {driver.distanceFromUniversity && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Distance to Riphah</Text>
+                    <Text style={styles.detailValue}>{driver.distanceFromUniversity}</Text>
+                  </View>
+                )}
+                {driver.etaToUniversity && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>ETA to Riphah</Text>
+                    <Text style={styles.detailValue}>{driver.etaToUniversity}</Text>
+                  </View>
+                )}
 
                 <View style={styles.actionButtons}>
                   <TouchableOpacity style={styles.contactButton}>
                     <Ionicons name="call-outline" size={16} color="#fff" />
-                    <Text style={styles.contactButtonText}>Call Driver</Text>
+                    <Text style={styles.contactButtonText}>Call</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.messageButton}>
-                    <Ionicons name="chatbubble-outline" size={16} color="#afd826" />
-                    <Text style={styles.messageButtonText}>Message</Text>
+                  <TouchableOpacity style={styles.mapButton} onPress={() => viewOnMap(driver)}>
+                    <Ionicons name="map-outline" size={16} color="#fff" />
+                    <Text style={styles.mapButtonText}>View on Map</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
 
-            {/* Expand/Collapse Icon */}
             <View style={styles.expandIcon}>
               <Ionicons
                 name={expandedDriver === driver.id ? "chevron-up" : "chevron-down"}
@@ -414,430 +468,120 @@ export default function DriverList({ navigation }) {
           </TouchableOpacity>
         ))}
 
-        {/* Empty State */}
         {filteredDrivers.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={64} color="#E2E8F0" />
             <Text style={styles.emptyTitle}>No Drivers Found</Text>
-            <Text style={styles.emptyText}>
-              {search || isFilterActive ? "Try adjusting your search or filters" : "No drivers available"}
-            </Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Filter Modal */}
       <FilterModal />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#f7f9fb"
-  },
+  safeArea: { flex: 1, backgroundColor: "#f7f9fb" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#afd826",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    padding: 16,
   },
-  backButton: {
-    padding: 4,
-  },
-  headerContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.9)",
-    marginTop: 2,
-  },
-  filterButton: {
-    padding: 8,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 8,
-    position: "relative",
-  },
-  activeFilterButton: {
-    backgroundColor: "#fff",
-  },
+  headerContent: { flex: 1, marginLeft: 12 },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
+  headerSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.9)" },
   filterIndicator: {
     position: "absolute",
-    top: 4,
-    right: 4,
+    top: 0,
+    right: 0,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#afd826",
+    backgroundColor: "#fff",
   },
   statsContainer: {
     flexDirection: "row",
     backgroundColor: "#fff",
     margin: 16,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 12,
+    padding: 16,
   },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#afd826",
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "#666",
-    fontWeight: "500",
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 8,
-  },
+  statItem: { flex: 1, alignItems: "center" },
+  statNumber: { fontSize: 20, fontWeight: "700", color: "#afd826" },
+  statLabel: { fontSize: 12, color: "#666" },
+  statDivider: { width: 1, backgroundColor: "#E5E7EB" },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
     margin: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: 12,
+    borderRadius: 8,
   },
-  searchIcon: {
-    marginRight: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-  },
-  activeFiltersContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
-  },
-  activeFiltersText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
-  },
-  activeFilterTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#afd826",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  activeFilterText: {
-    fontSize: 12,
-    color: "#fff",
-    fontWeight: "500",
-  },
-  clearAllButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#ff6b6b",
-    borderRadius: 16,
-  },
-  clearAllText: {
-    fontSize: 12,
-    color: "#fff",
-    fontWeight: "500",
-  },
-  container: {
-    flex: 1,
-    padding: 16,
-  },
+  searchInput: { flex: 1, marginLeft: 12, fontSize: 14 },
+  container: { flex: 1, padding: 16 },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  expandedCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#afd826",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
   },
-  driverInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: "#afd826",
-  },
-  nameContainer: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111",
-    marginBottom: 4,
-  },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rating: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginLeft: 4,
-    marginRight: 8,
-  },
-  rides: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  availabilityBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 4,
-  },
-  availableBadge: {
-    backgroundColor: "#4CAF50",
-  },
-  offlineBadge: {
-    backgroundColor: "#FF6B6B",
-  },
-  availabilityText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  basicInfo: {
-    marginBottom: 8,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  infoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 6,
-  },
-  infoText: {
-    fontSize: 14,
-    color: "#555",
-    fontWeight: "500",
-  },
-  expandedSection: {
-    marginTop: 12,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-  },
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  detailItem: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 4,
-    fontWeight: "500",
-  },
-  detailValue: {
-    fontSize: 14,
-    color: "#111",
-    fontWeight: "600",
-  },
-  actionButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 8,
-  },
+  cardHeader: { flexDirection: "row", alignItems: "center" },
+  avatar: { width: 40, height: 40, borderRadius: 20 },
+  nameContainer: { flex: 1, marginLeft: 12 },
+  driverName: { fontSize: 16, fontWeight: "700" },
+  rating: { fontSize: 12, color: "#666" },
+  availabilityBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  availableBadge: { backgroundColor: "#4CAF50" },
+  offlineBadge: { backgroundColor: "#FF6B6B" },
+  availabilityText: { fontSize: 10, color: "#fff" },
+  basicInfo: { flexDirection: "row", marginTop: 8, justifyContent: "space-between" },
+  infoText: { fontSize: 12, color: "#666" },
+  expandedSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#eee" },
+  detailRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  detailLabel: { fontSize: 12, color: "#666" },
+  detailValue: { fontSize: 12, color: "#333", fontWeight: "500" },
+  actionButtons: { flexDirection: "row", marginTop: 12, gap: 8 },
   contactButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#afd826",
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
+    padding: 8,
+    borderRadius: 6,
+    gap: 4,
   },
-  contactButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  messageButton: {
+  contactButtonText: { color: "#fff", fontSize: 12 },
+  mapButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#afd826",
-    gap: 6,
+    backgroundColor: "#3498DB",
+    padding: 8,
+    borderRadius: 6,
+    gap: 4,
   },
-  messageButtonText: {
-    color: "#afd826",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  expandIcon: {
-    alignItems: "center",
-    marginTop: 8,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#666",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111",
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111",
-    marginBottom: 12,
-  },
-  filterOptions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  filterOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
-  },
-  selectedFilterOption: {
-    backgroundColor: "#afd826",
-  },
-  filterOptionText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#666",
-  },
-  selectedFilterOptionText: {
-    color: "#fff",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 20,
-  },
-  clearButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  clearButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#666",
-  },
-  applyButton: {
-    flex: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: "#afd826",
-  },
-  applyButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
+  mapButtonText: { color: "#fff", fontSize: 12 },
+  expandIcon: { alignItems: "center", marginTop: 8 },
+  emptyState: { alignItems: "center", paddingVertical: 40 },
+  emptyTitle: { fontSize: 16, color: "#666", marginTop: 12 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: "#fff", padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: "700" },
+  filterSection: { marginBottom: 16 },
+  filterLabel: { fontSize: 14, fontWeight: "600", marginBottom: 8 },
+  filterOption: { padding: 12, borderRadius: 8, backgroundColor: "#f0f0f0", marginBottom: 8 },
+  selectedFilterOption: { backgroundColor: "#afd826" },
+  filterOptionText: { fontSize: 14 },
+  selectedFilterOptionText: { color: "#fff" },
+  modalActions: { flexDirection: "row", marginTop: 20, gap: 12 },
+  clearButton: { flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: "#ddd" },
+  clearButtonText: { textAlign: "center", color: "#666" },
+  applyButton: { flex: 2, padding: 12, borderRadius: 8, backgroundColor: "#afd826" },
+  applyButtonText: { textAlign: "center", color: "#fff" },
 });

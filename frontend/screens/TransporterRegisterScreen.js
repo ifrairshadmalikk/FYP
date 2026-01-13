@@ -17,7 +17,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_BASE_URL = 'http://192.168.0.109:3000/api';
+const API_BASE_URL = 'http://192.168.10.8:3000/api';
 
 export default function TransporterRegisterScreen({ navigation }) {
   const [formData, setFormData] = useState({

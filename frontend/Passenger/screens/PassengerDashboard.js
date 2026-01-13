@@ -20,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../context/AuthContext';
 
 // Use your actual IP address
-const API_BASE_URL = "http://192.168.0.109:5001/api";
+const API_BASE_URL = "http://192.168.10.8:5001/api";
 
 export default function PassengerDashboard({ navigation }) {
   const { userToken, logout } = useAuth();

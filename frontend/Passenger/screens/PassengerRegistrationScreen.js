@@ -65,7 +65,7 @@ const PassengerRegistrationScreen = ({ navigation }) => {
 const handleSubmit = async () => {
   setLoading(true);
   try {
-    const response = await fetch('http://192.168.0.109:5001/api/auth/register', {
+    const response = await fetch('http://192.168.10.3:5001/api/auth/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

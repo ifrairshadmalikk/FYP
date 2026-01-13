@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
@@ -15,9 +15,129 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+// Google Maps API Key
+const GOOGLE_MAPS_API_KEY = "AIzaSyDiZhjAhYniDLe4Ndr1u87NdDfIdZS6SME";
+
+// Google Maps Service
+const googleMapsService = {
+    async getGeocodeFromAddress(address) {
+        try {
+            const encodedAddress = encodeURIComponent(address);
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${GOOGLE_MAPS_API_KEY}`
+            );
+            const data = await response.json();
+            
+            if (data.results && data.results[0]) {
+                const location = data.results[0].geometry.location;
+                return {
+                    latitude: location.lat,
+                    longitude: location.lng,
+                    address: data.results[0].formatted_address,
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Error geocoding address:', error);
+            return null;
+        }
+    },
+
+    async getRouteWithWaypoints(waypoints) {
+        try {
+            if (waypoints.length < 2) return [];
+            
+            const origin = `${waypoints[0].latitude},${waypoints[0].longitude}`;
+            const destination = `${waypoints[waypoints.length-1].latitude},${waypoints[waypoints.length-1].longitude}`;
+            
+            let waypointsParam = '';
+            if (waypoints.length > 2) {
+                const viaPoints = waypoints.slice(1, -1).map(wp => 
+                    `${wp.latitude},${wp.longitude}`
+                ).join('|');
+                waypointsParam = `&waypoints=${viaPoints}`;
+            }
+            
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&key=${GOOGLE_MAPS_API_KEY}&mode=driving`
+            );
+            
+            const data = await response.json();
+            
+            if (data.routes && data.routes[0]) {
+                const points = data.routes[0].overview_polyline.points;
+                return this.decodePolyline(points);
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching route:', error);
+            return [];
+        }
+    },
+
+    decodePolyline(encoded) {
+        let points = [];
+        let index = 0, len = encoded.length;
+        let lat = 0, lng = 0;
+
+        while (index < len) {
+            let b, shift = 0, result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            points.push({
+                latitude: lat * 1e-5,
+                longitude: lng * 1e-5,
+            });
+        }
+        
+        return points;
+    },
+
+    async getDistanceAndETA(origin, destination) {
+        try {
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.latitude},${origin.longitude}&destinations=${destination.latitude},${destination.longitude}&key=${GOOGLE_MAPS_API_KEY}&mode=driving`
+            );
+            
+            const data = await response.json();
+            
+            if (data.rows && data.rows[0] && data.rows[0].elements[0]) {
+                const element = data.rows[0].elements[0];
+                if (element.status === 'OK') {
+                    return {
+                        distance: element.distance?.text || 'Unknown',
+                        duration: element.duration?.text || 'Unknown'
+                    };
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Error fetching distance:', error);
+            return null;
+        }
+    }
+};
+
 export default function CreateDailyPoll({ navigation }) {
     const [step, setStep] = useState(1);
     const [progress] = useState(new Animated.Value(25));
+    const [loading, setLoading] = useState(false);
 
     // States
     const [pollDate, setPollDate] = useState(new Date());
@@ -31,17 +151,70 @@ export default function CreateDailyPoll({ navigation }) {
             type: "Morning Slot", 
             start: "09:00 AM", 
             end: "11:00 AM", 
-            max: 50,
-            startTime: "09:00",
-            endTime: "11:00"
+            max: 50
         },
     ]);
+
+    // Networks with addresses for Google Maps
     const [networks, setNetworks] = useState([
-        { id: 1, name: "Blue Area", passengers: 156, selected: false },
-        { id: 2, name: "Gulberg", passengers: 132, selected: false },
-        { id: 3, name: "DHA", passengers: 98, selected: false },
-        { id: 4, name: "Johar Town", passengers: 87, selected: false },
+        { 
+            id: 1, 
+            name: "Blue Area", 
+            address: "Blue Area Islamabad",
+            passengers: 156, 
+            selected: false,
+            coordinates: null
+        },
+        { 
+            id: 2, 
+            name: "Gulberg", 
+            address: "Gulberg Lahore",
+            passengers: 132, 
+            selected: false,
+            coordinates: null
+        },
+        { 
+            id: 3, 
+            name: "DHA", 
+            address: "DHA Phase 5 Lahore",
+            passengers: 98, 
+            selected: false,
+            coordinates: null
+        },
+        { 
+            id: 4, 
+            name: "Johar Town", 
+            address: "Johar Town Lahore",
+            passengers: 87, 
+            selected: false,
+            coordinates: null
+        },
     ]);
+
+    // Load coordinates on mount
+    useEffect(() => {
+        loadNetworkCoordinates();
+    }, []);
+
+    const loadNetworkCoordinates = async () => {
+        setLoading(true);
+        try {
+            const updatedNetworks = await Promise.all(
+                networks.map(async (network) => {
+                    const coords = await googleMapsService.getGeocodeFromAddress(network.address);
+                    return {
+                        ...network,
+                        coordinates: coords || { latitude: 33.6844, longitude: 73.0479 }
+                    };
+                })
+            );
+            setNetworks(updatedNetworks);
+        } catch (error) {
+            console.error('Error loading coordinates:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Progress Animation
     const updateProgress = (newStep) => {
@@ -78,9 +251,7 @@ export default function CreateDailyPoll({ navigation }) {
             type: "New Slot",
             start: "12:00 PM",
             end: "02:00 PM",
-            max: 50,
-            startTime: "12:00",
-            endTime: "14:00"
+            max: 50
         };
         setTimeSlots([...timeSlots, newSlot]);
     };
@@ -118,61 +289,108 @@ export default function CreateDailyPoll({ navigation }) {
         setNetworks(networks.map(net => ({ ...net, selected: false })));
     };
 
-    // Generate realistic mock responses based on poll data
-    const generateMockResponses = (pollData) => {
+    // Generate routes using Google Maps API
+    const generateRoutes = async (selectedNetworks) => {
+        setLoading(true);
+        try {
+            const routes = [];
+            
+            // University destination (Riphah University)
+            const universityAddress = await googleMapsService.getGeocodeFromAddress(
+                "Riphah International University I-14 Islamabad"
+            ) || { latitude: 33.6462, longitude: 72.9834 };
+
+            for (const network of selectedNetworks) {
+                if (network.coordinates) {
+                    // Get route from network to university
+                    const route = await googleMapsService.getRouteWithWaypoints([
+                        network.coordinates,
+                        universityAddress
+                    ]);
+
+                    // Get distance and ETA
+                    const distanceData = await googleMapsService.getDistanceAndETA(
+                        network.coordinates,
+                        universityAddress
+                    );
+
+                    routes.push({
+                        networkId: network.id,
+                        networkName: network.name,
+                        startPoint: network.coordinates,
+                        destination: universityAddress,
+                        route: route,
+                        distance: distanceData?.distance || "Unknown",
+                        duration: distanceData?.duration || "Unknown",
+                        totalPassengers: network.passengers
+                    });
+                }
+            }
+
+            return routes;
+        } catch (error) {
+            console.error('Error generating routes:', error);
+            return [];
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Generate realistic mock responses
+    const generateMockResponses = async (pollData) => {
         const responses = [];
         const names = [
             "Ali Ahmed", "Sara Khan", "Usman Malik", "Fatima Noor", 
-            "Bilal Raza", "Ayesha Siddiqui", "Omar Farooq", "Zainab Ali",
-            "Ahmed Raza", "Sana Khan", "Muhammad Ali", "Hina Shah",
-            "Kamran Ahmed", "Nadia Malik", "Faisal Iqbal", "Sadia Noor"
+            "Bilal Raza", "Ayesha Siddiqui", "Omar Farooq", "Zainab Ali"
         ];
         
         const selectedNetworks = pollData.networks;
         const timeSlots = pollData.timeSlots;
         
-        // Generate responses proportional to network size
-        selectedNetworks.forEach(network => {
-            // Calculate response count based on network size (30-70% response rate)
+        // Generate responses with actual coordinates
+        for (const network of selectedNetworks) {
             const responseCount = Math.floor((network.passengers * (0.3 + Math.random() * 0.4)));
             
             for (let i = 0; i < responseCount; i++) {
                 const randomTimeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)];
                 
-                // More realistic status distribution
-                const rand = Math.random();
-                let status;
-                if (rand > 0.7) {
-                    status = 'confirmed';
-                } else if (rand > 0.4) {
-                    status = 'pending';
-                } else {
-                    status = 'cancelled';
-                }
+                // Get random coordinates near network location
+                const offsetLat = (Math.random() - 0.5) * 0.01; // ±0.005 degrees
+                const offsetLng = (Math.random() - 0.5) * 0.01;
                 
-                const randomName = names[Math.floor(Math.random() * names.length)];
-                
-                // Generate realistic response time (within last 24 hours)
                 const responseTime = new Date();
                 responseTime.setHours(responseTime.getHours() - Math.floor(Math.random() * 24));
                 responseTime.setMinutes(Math.floor(Math.random() * 60));
+                
+                const randomName = names[Math.floor(Math.random() * names.length)];
+                const rand = Math.random();
+                let status;
+                if (rand > 0.7) status = 'confirmed';
+                else if (rand > 0.4) status = 'pending';
+                else status = 'cancelled';
                 
                 responses.push({
                     id: `${network.id}-${i}-${Date.now()}`,
                     passengerName: randomName,
                     network: network.name,
+                    address: network.address,
+                    coordinates: network.coordinates ? {
+                        latitude: network.coordinates.latitude + offsetLat,
+                        longitude: network.coordinates.longitude + offsetLng
+                    } : { latitude: 33.6844, longitude: 73.0479 },
                     timeSlot: randomTimeSlot.type,
                     responseTime: responseTime,
-                    status: status
+                    status: status,
+                    pickupTime: randomTimeSlot.start
                 });
             }
-        });
+        }
         
         return responses;
     };
 
     // Submit poll and navigate to View Response
-    const submitPoll = () => {
+    const submitPoll = async () => {
         const selectedNetworks = networks.filter(net => net.selected);
         
         if (selectedNetworks.length === 0) {
@@ -185,91 +403,61 @@ export default function CreateDailyPoll({ navigation }) {
             return;
         }
 
-        // Prepare poll data to send to View Response screen
-        const pollData = {
-            id: Date.now().toString(),
-            date: pollDate.toISOString(), // Convert to string for safe navigation
-            message: pollMessage,
-            timeSlots: timeSlots,
-            networks: selectedNetworks,
-            totalPassengers: selectedNetworks.reduce((sum, net) => sum + net.passengers, 0),
-            totalCapacity: timeSlots.reduce((sum, slot) => sum + slot.max, 0),
-            createdAt: new Date().toISOString(),
-            status: "active"
-        };
+        setLoading(true);
 
-        // Generate realistic mock responses
-        const passengerResponses = generateMockResponses(pollData);
+        try {
+            // Generate routes using Google Maps API
+            const routes = await generateRoutes(selectedNetworks);
 
-        Alert.alert(
-            "Confirm Poll",
-            `Send this poll to ${selectedNetworks.length} networks with ${pollData.totalPassengers} total passengers?`,
-            [
-                { text: "Cancel", style: "cancel" },
-                { 
-                    text: "Send Poll", 
-                    onPress: () => {
-                        console.log("Poll Data:", pollData);
-                        console.log("Responses Count:", passengerResponses.length);
-                        
-                        navigation.navigate('ViewResponse', { 
-                            pollData: pollData,
-                            passengerResponses: passengerResponses,
-                            isNewPoll: true 
-                        });
+            // Prepare poll data
+            const pollData = {
+                id: Date.now().toString(),
+                date: pollDate.toISOString(),
+                message: pollMessage,
+                timeSlots: timeSlots,
+                networks: selectedNetworks,
+                routes: routes,
+                totalPassengers: selectedNetworks.reduce((sum, net) => sum + net.passengers, 0),
+                totalCapacity: timeSlots.reduce((sum, slot) => sum + slot.max, 0),
+                createdAt: new Date().toISOString(),
+                status: "active"
+            };
+
+            // Generate mock responses
+            const passengerResponses = await generateMockResponses(pollData);
+
+            Alert.alert(
+                "Poll Ready",
+                `Send to ${selectedNetworks.length} networks with ${pollData.totalPassengers} passengers?`,
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { 
+                        text: "Send Poll", 
+                        onPress: () => {
+                            navigation.navigate('ViewResponse', { 
+                                pollData: pollData,
+                                passengerResponses: passengerResponses,
+                                isNewPoll: true 
+                            });
+                        }
                     }
-                }
-            ]
-        );
+                ]
+            );
+
+        } catch (error) {
+            console.error('Error submitting poll:', error);
+            Alert.alert("Error", "Failed to create poll. Please try again.");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    // Custom Header
-    const Header = ({ title }) => (
-        <View style={styles.header}>
-            <View style={styles.headerTop}>
-                <TouchableOpacity 
-                    onPress={() => navigation.goBack()}
-                    style={styles.menuButton}
-                >
-                    <Ionicons name="arrow-back" size={26} color="#fff" />
-                </TouchableOpacity>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>{title}</Text>
-                </View>
-                <View style={styles.menuButton} />
-            </View>
-        </View>
-    );
-
-    // Progress Bar
-    const ProgressBar = () => (
-        <View style={styles.progressContainer}>
-            <View style={styles.progressLabels}>
-                <Text style={[styles.progressText, step >= 1 && styles.progressTextActive]}>Basic Info</Text>
-                <Text style={[styles.progressText, step >= 2 && styles.progressTextActive]}>Time Slots</Text>
-                <Text style={[styles.progressText, step >= 3 && styles.progressTextActive]}>Networks</Text>
-                <Text style={[styles.progressText, step >= 4 && styles.progressTextActive]}>Summary</Text>
-            </View>
-            <View style={styles.progressBar}>
-                <Animated.View 
-                    style={[
-                        styles.progressFill,
-                        { width: progress.interpolate({
-                            inputRange: [0, 100],
-                            outputRange: ['0%', '100%']
-                        }) }
-                    ]} 
-                />
-            </View>
-        </View>
-    );
-
-    // Step 1: Basic Information
+    // Render Basic Info
     const renderBasicInfo = () => (
         <View style={styles.card}>
             <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Poll Information</Text>
-                <Text style={styles.cardSubtitle}>Set up basic poll details</Text>
+                <Text style={styles.cardSubtitle}>Set basic poll details</Text>
             </View>
             
             <Text style={styles.label}>Poll Date</Text>
@@ -298,10 +486,10 @@ export default function CreateDailyPoll({ navigation }) {
             <TextInput
                 style={[styles.input, styles.textArea]}
                 multiline
-                numberOfLines={4}
+                numberOfLines={3}
                 value={pollMessage}
                 onChangeText={setPollMessage}
-                placeholder="Enter your poll message here..."
+                placeholder="Enter poll message..."
                 placeholderTextColor="#999"
             />
 
@@ -315,78 +503,69 @@ export default function CreateDailyPoll({ navigation }) {
         </View>
     );
 
-    // Step 2: Time Slots
+    // Render Time Slots
     const renderTimeSlots = () => (
         <View style={styles.card}>
             <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Time Slots Configuration</Text>
-                <Text style={styles.cardSubtitle}>Configure available time slots</Text>
+                <Text style={styles.cardTitle}>Time Slots</Text>
+                <Text style={styles.cardSubtitle}>Configure time slots</Text>
             </View>
             
-            <View style={styles.slotsContainer}>
-                {timeSlots.map((slot) => (
-                    <View key={slot.id} style={styles.slotCard}>
-                        <View style={styles.slotHeader}>
-                            <Text style={styles.slotTitle}>Time Slot</Text>
-                            <TouchableOpacity
-                                style={styles.deleteBtn}
-                                onPress={() => removeTimeSlot(slot.id)}
-                            >
-                                <Ionicons name="trash" size={20} color="#E74C3C" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={styles.slotLabel}>Slot Name</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={slot.type}
-                            onChangeText={(text) => updateTimeSlot(slot.id, 'type', text)}
-                            placeholder="e.g., Morning Slot, Evening Slot"
-                            placeholderTextColor="#999"
-                        />
-
-                        <View style={styles.timeRow}>
-                            <View style={styles.timeInputContainer}>
-                                <Text style={styles.slotLabel}>Start Time</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={slot.start}
-                                    onChangeText={(text) => updateTimeSlot(slot.id, 'start', text)}
-                                    placeholder="09:00 AM"
-                                    placeholderTextColor="#999"
-                                />
-                            </View>
-                            <View style={styles.timeInputContainer}>
-                                <Text style={styles.slotLabel}>End Time</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={slot.end}
-                                    onChangeText={(text) => updateTimeSlot(slot.id, 'end', text)}
-                                    placeholder="11:00 AM"
-                                    placeholderTextColor="#999"
-                                />
-                            </View>
-                        </View>
-
-                        <Text style={styles.slotLabel}>Maximum Passengers</Text>
-                        <TextInput
-                            style={styles.input}
-                            keyboardType="numeric"
-                            value={String(slot.max)}
-                            onChangeText={(text) => updateTimeSlot(slot.id, 'max', parseInt(text) || 0)}
-                            placeholder="50"
-                            placeholderTextColor="#999"
-                        />
+            {timeSlots.map((slot) => (
+                <View key={slot.id} style={styles.slotCard}>
+                    <View style={styles.slotHeader}>
+                        <Text style={styles.slotTitle}>Slot</Text>
+                        <TouchableOpacity onPress={() => removeTimeSlot(slot.id)}>
+                            <Ionicons name="trash" size={20} color="#E74C3C" />
+                        </TouchableOpacity>
                     </View>
-                ))}
-            </View>
+
+                    <TextInput
+                        style={styles.input}
+                        value={slot.type}
+                        onChangeText={(text) => updateTimeSlot(slot.id, 'type', text)}
+                        placeholder="Slot Name"
+                    />
+
+                    <View style={styles.timeRow}>
+                        <View style={styles.timeInputContainer}>
+                            <Text style={styles.slotLabel}>Start</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={slot.start}
+                                onChangeText={(text) => updateTimeSlot(slot.id, 'start', text)}
+                                placeholder="09:00 AM"
+                            />
+                        </View>
+                        <View style={styles.timeInputContainer}>
+                            <Text style={styles.slotLabel}>End</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={slot.end}
+                                onChangeText={(text) => updateTimeSlot(slot.id, 'end', text)}
+                                placeholder="11:00 AM"
+                            />
+                        </View>
+                        <View style={styles.timeInputContainer}>
+                            <Text style={styles.slotLabel}>Max</Text>
+                            <TextInput
+                                style={styles.input}
+                                keyboardType="numeric"
+                                value={String(slot.max)}
+                                onChangeText={(text) => updateTimeSlot(slot.id, 'max', parseInt(text) || 0)}
+                                placeholder="50"
+                            />
+                        </View>
+                    </View>
+                </View>
+            ))}
 
             <TouchableOpacity
                 style={styles.addButton}
                 onPress={addNewTimeSlot}
             >
                 <Ionicons name="add-circle" size={20} color="#afd826" />
-                <Text style={styles.addButtonText}>Add Another Time Slot</Text>
+                <Text style={styles.addButtonText}>Add Slot</Text>
             </TouchableOpacity>
 
             <View style={styles.navigationRow}>
@@ -408,7 +587,7 @@ export default function CreateDailyPoll({ navigation }) {
         </View>
     );
 
-    // Step 3: Networks
+    // Render Networks
     const renderNetworks = () => {
         const selectedCount = networks.filter(net => net.selected).length;
         const totalPassengers = networks.filter(net => net.selected).reduce((sum, net) => sum + net.passengers, 0);
@@ -417,61 +596,46 @@ export default function CreateDailyPoll({ navigation }) {
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
                     <Text style={styles.cardTitle}>Select Networks</Text>
-                    <Text style={styles.cardSubtitle}>Choose networks for this poll</Text>
+                    <Text style={styles.cardSubtitle}>Choose networks for poll</Text>
                 </View>
                 
                 <View style={styles.networkHeader}>
-                    <View>
-                        <Text style={styles.networkSubtitle}>
-                            {selectedCount} of {networks.length} networks selected
-                        </Text>
-                        <Text style={styles.passengerCount}>
-                            {totalPassengers} total passengers
-                        </Text>
-                    </View>
+                    <Text style={styles.networkSubtitle}>
+                        {selectedCount} networks selected • {totalPassengers} passengers
+                    </Text>
                     <View style={styles.networkActions}>
-                        <TouchableOpacity 
-                            style={styles.networkActionBtn}
-                            onPress={selectAllNetworks}
-                        >
+                        <TouchableOpacity onPress={selectAllNetworks}>
                             <Text style={styles.networkActionText}>Select All</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={styles.networkActionBtn}
-                            onPress={deselectAllNetworks}
-                        >
+                        <TouchableOpacity onPress={deselectAllNetworks}>
                             <Text style={styles.networkActionText}>Clear All</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                <View style={styles.networksList}>
-                    {networks.map((network) => (
-                        <TouchableOpacity
-                            key={network.id}
-                            style={[
-                                styles.networkItem,
-                                network.selected && styles.networkItemSelected
-                            ]}
-                            onPress={() => toggleNetwork(network.id)}
-                        >
-                            <View style={styles.networkInfo}>
-                                <Text style={styles.networkName}>{network.name}</Text>
-                                <Text style={styles.networkPassengers}>
-                                    {network.passengers} passengers
-                                </Text>
-                            </View>
-                            <View style={[
-                                styles.checkbox,
-                                network.selected && styles.checkboxSelected
-                            ]}>
-                                {network.selected && (
-                                    <Ionicons name="checkmark" size={16} color="#fff" />
-                                )}
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                {networks.map((network) => (
+                    <TouchableOpacity
+                        key={network.id}
+                        style={[
+                            styles.networkItem,
+                            network.selected && styles.networkItemSelected
+                        ]}
+                        onPress={() => toggleNetwork(network.id)}
+                    >
+                        <View style={styles.networkInfo}>
+                            <Text style={styles.networkName}>{network.name}</Text>
+                            <Text style={styles.networkPassengers}>
+                                {network.passengers} passengers • {network.address}
+                            </Text>
+                        </View>
+                        <View style={[
+                            styles.checkbox,
+                            network.selected && styles.checkboxSelected
+                        ]}>
+                            {network.selected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                        </View>
+                    </TouchableOpacity>
+                ))}
 
                 <View style={styles.navigationRow}>
                     <TouchableOpacity
@@ -493,7 +657,7 @@ export default function CreateDailyPoll({ navigation }) {
         );
     };
 
-    // Step 4: Summary
+    // Render Summary
     const renderSummary = () => {
         const selectedNetworks = networks.filter(net => net.selected);
         const totalPassengers = selectedNetworks.reduce((sum, net) => sum + net.passengers, 0);
@@ -503,74 +667,47 @@ export default function CreateDailyPoll({ navigation }) {
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
                     <Text style={styles.cardTitle}>Poll Summary</Text>
-                    <Text style={styles.cardSubtitle}>Review and confirm poll details</Text>
+                    <Text style={styles.cardSubtitle}>Review before sending</Text>
                 </View>
-
-                {/* Quick Stats */}
-                <View style={styles.statsGrid}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>{selectedNetworks.length}</Text>
-                        <Text style={styles.statLabel}>Networks</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>{totalPassengers}</Text>
-                        <Text style={styles.statLabel}>Passengers</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>{timeSlots.length}</Text>
-                        <Text style={styles.statLabel}>Time Slots</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>{totalCapacity}</Text>
-                        <Text style={styles.statLabel}>Total Capacity</Text>
-                    </View>
-                </View>
-
-                {/* Poll Details */}
+                
                 <View style={styles.summarySection}>
-                    <Text style={styles.summaryTitle}>📅 Poll Date</Text>
-                    <Text style={styles.summaryContent}>{formatDate(pollDate)}</Text>
+                    <Text style={styles.summaryTitle}>Date & Message</Text>
+                    <Text style={styles.summaryText}>📅 {formatDate(pollDate)}</Text>
+                    <Text style={styles.summaryText}>💬 {pollMessage}</Text>
                 </View>
 
                 <View style={styles.summarySection}>
-                    <Text style={styles.summaryTitle}>💬 Poll Message</Text>
-                    <Text style={styles.summaryContent}>{pollMessage}</Text>
-                </View>
-
-                {/* Selected Networks */}
-                <View style={styles.summarySection}>
-                    <Text style={styles.summaryTitle}>🌐 Selected Networks</Text>
-                    {selectedNetworks.length === 0 ? (
-                        <Text style={styles.noSelection}>No networks selected</Text>
-                    ) : (
-                        selectedNetworks.map((network) => (
-                            <View key={network.id} style={styles.networkSummaryItem}>
-                                <Text style={styles.networkSummaryName}>{network.name}</Text>
-                                <Text style={styles.networkSummaryPassengers}>
-                                    {network.passengers} passengers
-                                </Text>
-                            </View>
-                        ))
-                    )}
-                </View>
-
-                {/* Time Slots */}
-                <View style={styles.summarySection}>
-                    <Text style={styles.summaryTitle}>⏰ Time Slots</Text>
-                    {timeSlots.map((slot, index) => (
-                        <View key={slot.id} style={styles.timeSlotSummary}>
-                            <Text style={styles.timeSlotName}>{slot.type}</Text>
-                            <Text style={styles.timeSlotTime}>
-                                {slot.start} - {slot.end}
-                            </Text>
-                            <Text style={styles.timeSlotCapacity}>
-                                Capacity: {slot.max} passengers
-                            </Text>
-                        </View>
+                    <Text style={styles.summaryTitle}>Time Slots</Text>
+                    {timeSlots.map(slot => (
+                        <Text key={slot.id} style={styles.summaryText}>
+                            ⏰ {slot.type}: {slot.start} - {slot.end} (Max: {slot.max})
+                        </Text>
                     ))}
                 </View>
 
-                {/* Navigation */}
+                <View style={styles.summarySection}>
+                    <Text style={styles.summaryTitle}>Selected Networks</Text>
+                    {selectedNetworks.map(network => (
+                        <Text key={network.id} style={styles.summaryText}>
+                            📍 {network.name}: {network.passengers} passengers
+                            {network.coordinates && (
+                                <Text style={styles.coordinatesText}>
+                                    {"\n"}📍 Coordinates: {network.coordinates.latitude.toFixed(4)}, {network.coordinates.longitude.toFixed(4)}
+                                </Text>
+                            )}
+                        </Text>
+                    ))}
+                </View>
+
+                <View style={styles.summarySection}>
+                    <Text style={styles.summaryTitle}>Totals</Text>
+                    <Text style={styles.summaryText}>👥 Total Passengers: {totalPassengers}</Text>
+                    <Text style={styles.summaryText}>🚐 Total Capacity: {totalCapacity}</Text>
+                    <Text style={styles.summaryText}>
+                        🎯 Coverage: {((totalCapacity / totalPassengers) * 100).toFixed(1)}%
+                    </Text>
+                </View>
+
                 <View style={styles.navigationRow}>
                     <TouchableOpacity
                         style={[styles.btn, styles.btnSecondary]}
@@ -580,11 +717,18 @@ export default function CreateDailyPoll({ navigation }) {
                         <Text style={styles.btnTextSecondary}>Previous</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
-                        style={[styles.btn, styles.btnSuccess]} 
+                        style={[styles.btn, styles.btnPrimary]} 
                         onPress={submitPoll}
+                        disabled={loading}
                     >
-                        <Ionicons name="send" size={20} color="#fff" />
-                        <Text style={styles.btnTextSuccess}>Send Poll & View Response</Text>
+                        {loading ? (
+                            <Text style={styles.btnText}>Creating Poll...</Text>
+                        ) : (
+                            <>
+                                <Text style={styles.btnText}>Create Poll</Text>
+                                <Ionicons name="checkmark" size={20} color="#fff" />
+                            </>
+                        )}
                     </TouchableOpacity>
                 </View>
             </View>
@@ -592,15 +736,41 @@ export default function CreateDailyPoll({ navigation }) {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar backgroundColor="#afd826" barStyle="light-content" />
-            <Header title="Create Daily Poll" />
-            <ProgressBar />
-            <ScrollView 
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+            
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                    <Ionicons name="arrow-back" size={24} color="#333" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Create Daily Poll</Text>
+                <View style={{width: 24}} />
+            </View>
+
+            {/* Progress Bar */}
+            <View style={styles.progressContainer}>
+                <View style={styles.progressBar}>
+                    <Animated.View 
+                        style={[
+                            styles.progressFill,
+                            { width: progress.interpolate({
+                                inputRange: [0, 100],
+                                outputRange: ['0%', '100%']
+                            }) }
+                        ]} 
+                    />
+                </View>
+                <View style={styles.progressLabels}>
+                    <Text style={[styles.progressText, step >= 1 && styles.progressTextActive]}>Basic</Text>
+                    <Text style={[styles.progressText, step >= 2 && styles.progressTextActive]}>Time</Text>
+                    <Text style={[styles.progressText, step >= 3 && styles.progressTextActive]}>Network</Text>
+                    <Text style={[styles.progressText, step >= 4 && styles.progressTextActive]}>Summary</Text>
+                </View>
+            </View>
+
+            {/* Content */}
+            <ScrollView style={styles.content}>
                 {step === 1 && renderBasicInfo()}
                 {step === 2 && renderTimeSlots()}
                 {step === 3 && renderNetworks()}
@@ -610,403 +780,268 @@ export default function CreateDailyPoll({ navigation }) {
     );
 }
 
-// Styles remain exactly the same...
 const styles = StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: "#afd826" },
-    scrollView: { flex: 1, backgroundColor: "#F9FAFB" },
-    scrollContent: { padding: 16, flexGrow: 1 },
-
-    // Header - Aligned with Dashboard
-    header: {
-        backgroundColor: "#afd826",
-        paddingVertical: 16,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 25,
-        borderBottomRightRadius: 25,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8,
-    },
-    headerTop: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 10,
-    },
-    menuButton: {
-        padding: 8,
-    },
-    headerTitleContainer: {
+    container: {
         flex: 1,
-        alignItems: "center",
+        backgroundColor: '#f8f9fa',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#fff',
     },
     headerTitle: {
-        fontSize: 20,
-        fontWeight: "800",
-        color: "#fff",
-        textAlign: "center",
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
     },
-
-    // Progress Bar
     progressContainer: {
-        backgroundColor: "#fff",
-        paddingVertical: 16,
-        paddingHorizontal: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: "#f0f0f0",
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#fff',
+    },
+    progressBar: {
+        height: 4,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: '#afd826',
     },
     progressLabels: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginBottom: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 8,
     },
     progressText: {
         fontSize: 12,
-        fontWeight: "600",
-        color: "#7F8C8D",
-        textAlign: "center",
-        flex: 1,
+        color: '#999',
     },
     progressTextActive: {
-        color: "#afd826",
-        fontWeight: "700",
+        color: '#afd826',
+        fontWeight: '600',
     },
-    progressBar: {
-        height: 6,
-        backgroundColor: "#ECF0F1",
-        borderRadius: 3,
-        overflow: "hidden",
+    content: {
+        flex: 1,
+        padding: 16,
     },
-    progressFill: {
-        height: "100%",
-        backgroundColor: "#afd826",
-        borderRadius: 3,
-    },
-
-    // Cards & Layout - Aligned with Dashboard
     card: {
-        backgroundColor: "#fff",
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
-        elevation: 6,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        borderWidth: 1,
-        borderColor: "#f0f0f0",
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
     },
     cardHeader: {
-        marginBottom: 24,
+        marginBottom: 16,
     },
     cardTitle: {
-        fontSize: 20,
-        fontWeight: "800",
-        color: "#2C3E50",
-        marginBottom: 4,
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
     },
     cardSubtitle: {
         fontSize: 14,
-        color: "#7F8C8D",
-        fontWeight: "500",
+        color: '#666',
+        marginTop: 4,
     },
-
-    // Inputs
     label: {
-        fontWeight: "600",
-        marginTop: 16,
-        marginBottom: 8,
-        color: "#2C3E50",
         fontSize: 14,
+        fontWeight: '500',
+        color: '#333',
+        marginBottom: 8,
     },
     input: {
         borderWidth: 1,
-        borderColor: "#E1E8ED",
-        borderRadius: 12,
-        padding: 16,
-        backgroundColor: "#F8F9FA",
-        fontSize: 16,
-        color: "#2C3E50",
+        borderColor: '#ddd',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14,
+        color: '#333',
+        marginBottom: 12,
     },
     textArea: {
-        height: 100,
-        textAlignVertical: "top",
+        height: 80,
+        textAlignVertical: 'top',
     },
     dateInput: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         borderWidth: 1,
-        borderColor: "#E1E8ED",
-        borderRadius: 12,
-        padding: 16,
-        backgroundColor: "#F8F9FA",
+        borderColor: '#ddd',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 12,
     },
     dateText: {
-        fontSize: 16,
-        color: "#2C3E50",
-        fontWeight: "500",
-    },
-
-    // Buttons - Aligned with Dashboard
-    btn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        borderRadius: 12,
-        marginTop: 20,
-        flex: 1,
-        marginHorizontal: 6,
-    },
-    btnPrimary: {
-        backgroundColor: "#afd826",
-    },
-    btnSecondary: {
-        backgroundColor: "#F8F9FA",
-        borderWidth: 1,
-        borderColor: "#E1E8ED",
-    },
-    btnSuccess: {
-        backgroundColor: "#27AE60",
-    },
-    btnText: {
-        color: "#fff",
-        fontWeight: "700",
-        fontSize: 16,
-        marginRight: 8,
-    },
-    btnTextSecondary: {
-        color: "#7F8C8D",
-        fontWeight: "600",
-        fontSize: 16,
-        marginLeft: 8,
-    },
-    btnTextSuccess: {
-        color: "#fff",
-        fontWeight: "700",
-        fontSize: 16,
-        marginLeft: 8,
-    },
-
-    // Time Slots
-    slotsContainer: {
-        marginBottom: 20,
+        fontSize: 14,
+        color: '#333',
     },
     slotCard: {
         borderWidth: 1,
-        borderColor: "#E1E8ED",
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 16,
-        backgroundColor: "#F8F9FA",
+        borderColor: '#eee',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 12,
     },
     slotHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 16,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
     },
     slotTitle: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#2C3E50",
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
     },
-    deleteBtn: {
-        padding: 8,
+    slotLabel: {
+        fontSize: 12,
+        color: '#666',
+        marginBottom: 4,
     },
     timeRow: {
-        flexDirection: "row",
-        gap: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
     },
     timeInputContainer: {
         flex: 1,
-    },
-    slotLabel: {
-        fontWeight: "600",
-        marginTop: 12,
-        marginBottom: 6,
-        color: "#2C3E50",
-        fontSize: 14,
+        marginRight: 8,
     },
     addButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#F0F9FF",
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#E1F5FE",
-        borderStyle: "dashed",
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderWidth: 2,
+        borderColor: '#afd826',
+        borderStyle: 'dashed',
+        borderRadius: 8,
+        marginBottom: 16,
     },
     addButtonText: {
-        color: "#afd826",
-        fontWeight: "600",
-        fontSize: 16,
+        fontSize: 14,
+        color: '#afd826',
+        fontWeight: '500',
         marginLeft: 8,
     },
-
-    // Networks
     networkHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
     },
     networkSubtitle: {
         fontSize: 14,
-        color: "#7F8C8D",
-        fontWeight: "500",
-    },
-    passengerCount: {
-        fontSize: 12,
-        color: "#afd826",
-        fontWeight: "600",
-        marginTop: 2,
+        color: '#666',
     },
     networkActions: {
-        flexDirection: "row",
-        gap: 16,
-    },
-    networkActionBtn: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-    },
-    networkActionText: {
-        color: "#afd826",
-        fontWeight: "600",
-        fontSize: 14,
-    },
-    networksList: {
+        flexDirection: 'row',
         gap: 12,
     },
+    networkActionText: {
+        fontSize: 12,
+        color: '#afd826',
+        fontWeight: '500',
+    },
     networkItem: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: 20,
-        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
         borderWidth: 1,
-        borderColor: "#E1E8ED",
-        backgroundColor: "#F8F9FA",
+        borderColor: '#eee',
+        borderRadius: 8,
+        marginBottom: 8,
     },
     networkItemSelected: {
-        backgroundColor: "#F2FFE0",
-        borderColor: "#afd826",
+        borderColor: '#afd826',
+        backgroundColor: '#f8fdf0',
     },
     networkInfo: {
         flex: 1,
     },
     networkName: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#2C3E50",
-        marginBottom: 4,
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#333',
     },
     networkPassengers: {
-        fontSize: 14,
-        color: "#7F8C8D",
+        fontSize: 12,
+        color: '#666',
+        marginTop: 2,
     },
     checkbox: {
         width: 24,
         height: 24,
-        borderRadius: 6,
+        borderRadius: 12,
         borderWidth: 2,
-        borderColor: "#BDC3C7",
-        justifyContent: "center",
-        alignItems: "center",
+        borderColor: '#ddd',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     checkboxSelected: {
-        backgroundColor: "#afd826",
-        borderColor: "#afd826",
-    },
-
-    // Summary
-    statsGrid: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginBottom: 24,
-    },
-    statItem: {
-        alignItems: "center",
-        flex: 1,
-    },
-    statNumber: {
-        fontSize: 20,
-        fontWeight: "800",
-        color: "#afd826",
-        marginBottom: 4,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: "#7F8C8D",
-        textAlign: "center",
-        fontWeight: "500",
+        backgroundColor: '#afd826',
+        borderColor: '#afd826',
     },
     summarySection: {
-        marginBottom: 24,
+        marginBottom: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
     },
     summaryTitle: {
         fontSize: 16,
-        fontWeight: "700",
-        color: "#2C3E50",
+        fontWeight: '600',
+        color: '#333',
         marginBottom: 8,
     },
-    summaryContent: {
-        fontSize: 15,
-        color: "#7F8C8D",
-        lineHeight: 20,
-    },
-    noSelection: {
-        color: "#95A5A6",
-        fontStyle: "italic",
-    },
-    networkSummaryItem: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: "#ECF0F1",
-    },
-    networkSummaryName: {
-        fontSize: 15,
-        color: "#2C3E50",
-        fontWeight: "500",
-    },
-    networkSummaryPassengers: {
+    summaryText: {
         fontSize: 14,
-        color: "#7F8C8D",
+        color: '#666',
+        marginBottom: 4,
     },
-    timeSlotSummary: {
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: "#ECF0F1",
+    coordinatesText: {
+        fontSize: 12,
+        color: '#999',
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
-    timeSlotName: {
-        fontSize: 15,
-        fontWeight: "600",
-        color: "#2C3E50",
-        marginBottom: 2,
-    },
-    timeSlotTime: {
-        fontSize: 14,
-        color: "#7F8C8D",
-        marginBottom: 2,
-    },
-    timeSlotCapacity: {
-        fontSize: 13,
-        color: "#95A5A6",
-    },
-
-    // Navigation
     navigationRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginTop: 8,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 16,
+    },
+    btn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 8,
+        minWidth: 120,
+        justifyContent: 'center',
+    },
+    btnPrimary: {
+        backgroundColor: '#afd826',
+    },
+    btnSecondary: {
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    btnText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#fff',
+        marginRight: 8,
+    },
+    btnTextSecondary: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#666',
+        marginLeft: 8,
     },
 });

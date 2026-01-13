@@ -13,7 +13,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import styles from '../../styles/NotificationScreenStyle';
 
-const API_BASE_URL = 'http://192.168.0.109:5001/api';
+const API_BASE_URL = 'http://192.168.10.8:5001/api';
 
 const categories = [
   { id: 'all', label: 'All', icon: 'apps' },
@@ -90,7 +90,7 @@ export default function NotificationsScreen({ navigation }) {
       console.error('❌ Fetch notifications error:', error);
       RNAlert.alert(
         'Connection Error', 
-        'Please make sure server is running on http://192.168.0.109:5001'
+        'Please make sure server is running on http://192.168.10.8:5001'
       );
       setNotifications([]);
       setCounts({ total: 0, unread: 0 });

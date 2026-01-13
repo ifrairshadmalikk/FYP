@@ -46,7 +46,7 @@ function CustomDrawerContent({ navigation }) {
         return;
       }
 
-      const response = await fetch('http://192.168.0.109:5001/api/passenger/profile', {
+      const response = await fetch('http://192.168.10.8:5001/api/passenger/profile', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${userToken}`,

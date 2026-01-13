@@ -8,12 +8,188 @@ import {
     StyleSheet,
     Dimensions,
     Modal,
+    ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import MapView, { Marker, Polyline } from "react-native-maps";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
+// Google Maps API Key
+const GOOGLE_MAPS_API_KEY = "AIzaSyDiZhjAhYniDLe4Ndr1u87NdDfIdZS6SME";
+
+// Google Maps API Service
+const googleMapsService = {
+    // Decode polyline from Google Maps
+    decodePolyline(encoded) {
+        let points = [];
+        let index = 0, len = encoded.length;
+        let lat = 0, lng = 0;
+
+        while (index < len) {
+            let b, shift = 0, result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            points.push({
+                latitude: lat * 1e-5,
+                longitude: lng * 1e-5,
+            });
+        }
+        
+        return points;
+    },
+
+    // Get route between multiple points using Google Maps Directions API
+    async getRouteWithWaypoints(waypoints) {
+        try {
+            if (waypoints.length < 2) return [];
+
+            const origin = `${waypoints[0].latitude},${waypoints[0].longitude}`;
+            const destination = `${waypoints[waypoints.length-1].latitude},${waypoints[waypoints.length-1].longitude}`;
+            
+            let waypointsParam = '';
+            if (waypoints.length > 2) {
+                const viaPoints = waypoints.slice(1, -1).map(wp => 
+                    `${wp.latitude},${wp.longitude}`
+                ).join('|');
+                waypointsParam = `&waypoints=${viaPoints}`;
+            }
+            
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&key=${GOOGLE_MAPS_API_KEY}&mode=driving`
+            );
+            
+            const data = await response.json();
+            
+            if (data.routes && data.routes[0]) {
+                const points = data.routes[0].overview_polyline.points;
+                return this.decodePolyline(points);
+            }
+            return [];
+        } catch (error) {
+            console.error('Error fetching route with waypoints:', error);
+            return [];
+        }
+    },
+
+    // Geocode address to coordinates
+    async getGeocodeFromAddress(address) {
+        try {
+            const encodedAddress = encodeURIComponent(address);
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${GOOGLE_MAPS_API_KEY}`
+            );
+            
+            const data = await response.json();
+            
+            if (data.results && data.results[0]) {
+                const location = data.results[0].geometry.location;
+                return {
+                    latitude: location.lat,
+                    longitude: location.lng,
+                    address: data.results[0].formatted_address,
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Error geocoding address:', error);
+            return null;
+        }
+    },
+
+    // Get distance and ETA between two points
+    async getDistanceAndETA(origin, destination) {
+        try {
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.latitude},${origin.longitude}&destinations=${destination.latitude},${destination.longitude}&key=${GOOGLE_MAPS_API_KEY}&mode=driving&departure_time=now`
+            );
+            
+            const data = await response.json();
+            
+            if (data.rows && data.rows[0] && data.rows[0].elements[0]) {
+                const element = data.rows[0].elements[0];
+                if (element.status === 'OK') {
+                    return {
+                        distance: element.distance?.text || 'Unknown',
+                        duration: element.duration?.text || 'Unknown',
+                        durationInTraffic: element.duration_in_traffic?.text || element.duration?.text || 'Unknown'
+                    };
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Error fetching distance matrix:', error);
+            return null;
+        }
+    },
+
+    // Get optimized route between multiple points
+    async getOptimizedRoute(waypoints, optimize = true) {
+        try {
+            if (waypoints.length < 2) return { route: [], distance: '0 km', duration: '0 min' };
+
+            const origin = `${waypoints[0].latitude},${waypoints[0].longitude}`;
+            const destination = `${waypoints[waypoints.length-1].latitude},${waypoints[waypoints.length-1].longitude}`;
+            
+            let waypointsParam = '';
+            if (waypoints.length > 2) {
+                const viaPoints = waypoints.slice(1, -1).map(wp => 
+                    `${wp.latitude},${wp.longitude}`
+                ).join('|');
+                waypointsParam = `&waypoints=${optimize ? 'optimize:true|' : ''}${viaPoints}`;
+            }
+            
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&key=${GOOGLE_MAPS_API_KEY}&mode=driving`
+            );
+            
+            const data = await response.json();
+            
+            if (data.routes && data.routes[0]) {
+                const points = data.routes[0].overview_polyline.points;
+                const route = this.decodePolyline(points);
+                
+                // Calculate total distance and duration
+                let totalDistance = 0;
+                let totalDuration = 0;
+                
+                if (data.routes[0].legs) {
+                    data.routes[0].legs.forEach(leg => {
+                        totalDistance += leg.distance?.value || 0;
+                        totalDuration += leg.duration?.value || 0;
+                    });
+                }
+                
+                return {
+                    route,
+                    distance: `${(totalDistance / 1000).toFixed(1)} km`,
+                    duration: `${Math.ceil(totalDuration / 60)} min`
+                };
+            }
+            return { route: [], distance: '0 km', duration: '0 min' };
+        } catch (error) {
+            console.error('Error fetching optimized route:', error);
+            return { route: [], distance: '0 km', duration: '0 min' };
+        }
+    }
+};
 
 export default function AssignRoutesScreen({ navigation }) {
     const [selectedTab, setSelectedTab] = useState("drivers");
@@ -24,8 +200,19 @@ export default function AssignRoutesScreen({ navigation }) {
     const [driverLocations, setDriverLocations] = useState({});
     const [estimatedTimes, setEstimatedTimes] = useState({});
     const [showDriverRouteModal, setShowDriverRouteModal] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [driverRoutes, setDriverRoutes] = useState({});
+    const [optimizedRoutes, setOptimizedRoutes] = useState({});
 
-    // Islamabad coordinates for map
+    // Riphah University coordinates from Google Maps API
+    const [riphahUniversity, setRiphahUniversity] = useState({
+        latitude: 33.6462,
+        longitude: 72.9834,
+        name: "Riphah International University",
+        address: "Al-Mizan II, I-14, Islamabad"
+    });
+
+    // Initial map region (Islamabad)
     const ISLAMABAD_REGION = {
         latitude: 33.6844,
         longitude: 73.0479,
@@ -33,15 +220,27 @@ export default function AssignRoutesScreen({ navigation }) {
         longitudeDelta: 0.3,
     };
 
-    // Riphah University coordinates
-    const RIPHAH_UNIVERSITY = {
-        latitude: 33.6462,
-        longitude: 72.9834,
-        name: "Riphah University",
-        address: "Al-Mizan II, I-14, Islamabad"
+    // Load Riphah University coordinates from Google Maps on mount
+    useEffect(() => {
+        loadRiphahCoordinates();
+    }, []);
+
+    const loadRiphahCoordinates = async () => {
+        try {
+            const geocode = await googleMapsService.getGeocodeFromAddress("Riphah International University I-14 Islamabad");
+            if (geocode) {
+                setRiphahUniversity({
+                    ...geocode,
+                    name: "Riphah International University",
+                    address: geocode.address
+                });
+            }
+        } catch (error) {
+            console.error('Error loading Riphah coordinates:', error);
+        }
     };
 
-    // Drivers with their specific route sectors and starting points
+    // Drivers data with areas to geocode
     const drivers = useMemo(() => [
         { 
             id: "driver-1", 
@@ -50,9 +249,9 @@ export default function AssignRoutesScreen({ navigation }) {
             capacity: 12,
             currentLoad: 0,
             routeSector: "Blue Area Sector",
-            routeRadius: ["F-7", "F-8", "Blue Area", "Jinnah Super"],
+            routeRadius: ["F-7 Markaz Islamabad", "F-8 Markaz Islamabad", "Blue Area Islamabad", "Jinnah Super Market Islamabad"],
             color: "#3498DB",
-            startLocation: { latitude: 33.7245, longitude: 73.0903 },
+            startLocation: null, // Will be geocoded
             routeColor: "#3498DB",
             contact: "+92-300-1234567",
             rating: 4.8
@@ -64,9 +263,9 @@ export default function AssignRoutesScreen({ navigation }) {
             capacity: 8,
             currentLoad: 0,
             routeSector: "Gulberg Sector",
-            routeRadius: ["Gulberg III", "Gulberg IV", "Main Boulevard", "Kalma Chowk"],
+            routeRadius: ["Gulberg III Lahore", "Gulberg IV Lahore", "Main Boulevard Gulberg Lahore", "Kalma Chowk Lahore"],
             color: "#27AE60",
-            startLocation: { latitude: 33.7000, longitude: 73.0667 },
+            startLocation: null, // Will be geocoded
             routeColor: "#27AE60",
             contact: "+92-300-2345678",
             rating: 4.6
@@ -78,9 +277,9 @@ export default function AssignRoutesScreen({ navigation }) {
             capacity: 6,
             currentLoad: 0,
             routeSector: "DHA Sector", 
-            routeRadius: ["DHA Phase 1", "DHA Phase 2", "DHA Phase 3", "Y-Block"],
+            routeRadius: ["DHA Phase 1 Lahore", "DHA Phase 2 Lahore", "DHA Phase 3 Lahore", "Y-Block DHA Lahore"],
             color: "#E74C3C",
-            startLocation: { latitude: 33.6667, longitude: 73.0333 },
+            startLocation: null, // Will be geocoded
             routeColor: "#E74C3C",
             contact: "+92-300-3456789",
             rating: 4.9
@@ -92,49 +291,49 @@ export default function AssignRoutesScreen({ navigation }) {
             capacity: 4,
             currentLoad: 0,
             routeSector: "Johar Town Sector",
-            routeRadius: ["Johar Town", "Wapda Town", "Model Town", "Faisal Town"],
+            routeRadius: ["Johar Town Lahore", "Wapda Town Lahore", "Model Town Lahore", "Faisal Town Lahore"],
             color: "#F39C12",
-            startLocation: { latitude: 33.6500, longitude: 73.1167 },
+            startLocation: null, // Will be geocoded
             routeColor: "#F39C12",
             contact: "+92-300-4567890",
             rating: 4.7
         },
     ], []);
 
-    // Passengers with actual coordinates for map stops
+    // Passengers with addresses to geocode
     const passengers = useMemo(() => [
         // Blue Area Sector Passengers
         { 
             id: "blue-p1", 
             name: "Ahmad Ali", 
-            area: "F-8 Markaz", 
+            address: "F-8 Markaz Islamabad", 
             sector: "Blue Area Sector",
             university: "Riphah University",
             pickupTime: "8:15 AM",
             driverSector: "Blue Area Sector",
-            coordinates: { latitude: 33.7245, longitude: 73.0903 },
+            coordinates: null, // Will be geocoded
             stopOrder: 1
         },
         { 
             id: "blue-p2", 
             name: "Sara Khan", 
-            area: "Blue Area", 
+            address: "Blue Area Islamabad", 
             sector: "Blue Area Sector",
             university: "Riphah University", 
             pickupTime: "8:00 AM",
             driverSector: "Blue Area Sector",
-            coordinates: { latitude: 33.7210, longitude: 73.0830 },
+            coordinates: null, // Will be geocoded
             stopOrder: 2
         },
         { 
             id: "blue-p3", 
             name: "Bilal Ahmed", 
-            area: "Jinnah Super", 
+            address: "Jinnah Super Market Islamabad", 
             sector: "Blue Area Sector",
             university: "Riphah University",
             pickupTime: "8:30 AM",
             driverSector: "Blue Area Sector",
-            coordinates: { latitude: 33.7180, longitude: 73.0780 },
+            coordinates: null, // Will be geocoded
             stopOrder: 3
         },
 
@@ -142,34 +341,34 @@ export default function AssignRoutesScreen({ navigation }) {
         { 
             id: "gulberg-p1", 
             name: "Faisal Khan", 
-            area: "Gulberg III", 
+            address: "Gulberg III Lahore", 
             sector: "Gulberg Sector",
             university: "Riphah University",
             pickupTime: "8:30 AM",
             driverSector: "Gulberg Sector",
-            coordinates: { latitude: 33.7000, longitude: 73.0667 },
+            coordinates: null, // Will be geocoded
             stopOrder: 1
         },
         { 
             id: "gulberg-p2", 
             name: "Hina Shah", 
-            area: "Main Boulevard", 
+            address: "Main Boulevard Gulberg Lahore", 
             sector: "Gulberg Sector", 
             university: "Riphah University",
             pickupTime: "8:45 AM",
             driverSector: "Gulberg Sector",
-            coordinates: { latitude: 33.6950, longitude: 73.0630 },
+            coordinates: null, // Will be geocoded
             stopOrder: 2
         },
         { 
             id: "gulberg-p3", 
             name: "Kamran Ali", 
-            area: "Kalma Chowk", 
+            address: "Kalma Chowk Lahore", 
             sector: "Gulberg Sector",
             university: "Riphah University",
             pickupTime: "8:15 AM",
             driverSector: "Gulberg Sector",
-            coordinates: { latitude: 33.6900, longitude: 73.0600 },
+            coordinates: null, // Will be geocoded
             stopOrder: 3
         },
 
@@ -177,34 +376,34 @@ export default function AssignRoutesScreen({ navigation }) {
         { 
             id: "dha-p1", 
             name: "Zainab Noor", 
-            area: "DHA Phase 2", 
+            address: "DHA Phase 2 Lahore", 
             sector: "DHA Sector",
             university: "Riphah University",
             pickupTime: "8:20 AM",
             driverSector: "DHA Sector",
-            coordinates: { latitude: 33.6667, longitude: 73.0333 },
+            coordinates: null, // Will be geocoded
             stopOrder: 1
         },
         { 
             id: "dha-p2", 
             name: "Omar Farooq", 
-            area: "Y-Block", 
+            address: "Y-Block DHA Lahore", 
             sector: "DHA Sector",
             university: "Riphah University",
             pickupTime: "8:35 AM",
             driverSector: "DHA Sector",
-            coordinates: { latitude: 33.6630, longitude: 73.0300 },
+            coordinates: null, // Will be geocoded
             stopOrder: 2
         },
         { 
             id: "dha-p3", 
             name: "Fatima Raza", 
-            area: "DHA Phase 1", 
+            address: "DHA Phase 1 Lahore", 
             sector: "DHA Sector",
             university: "Riphah University",
             pickupTime: "8:10 AM",
             driverSector: "DHA Sector",
-            coordinates: { latitude: 33.6700, longitude: 73.0360 },
+            coordinates: null, // Will be geocoded
             stopOrder: 3
         },
 
@@ -212,37 +411,89 @@ export default function AssignRoutesScreen({ navigation }) {
         { 
             id: "johar-p1", 
             name: "Usman Sheikh", 
-            area: "Johar Town", 
+            address: "Johar Town Lahore", 
             sector: "Johar Town Sector",
             university: "Riphah University",
             pickupTime: "8:25 AM",
             driverSector: "Johar Town Sector",
-            coordinates: { latitude: 33.6500, longitude: 73.1167 },
+            coordinates: null, // Will be geocoded
             stopOrder: 1
         },
         { 
             id: "johar-p2", 
             name: "Ayesha Malik", 
-            area: "Wapda Town", 
+            address: "Wapda Town Lahore", 
             sector: "Johar Town Sector",
             university: "Riphah University",
             pickupTime: "8:40 AM",
             driverSector: "Johar Town Sector",
-            coordinates: { latitude: 33.6450, longitude: 73.1200 },
+            coordinates: null, // Will be geocoded
             stopOrder: 2
         },
         { 
             id: "johar-p3", 
             name: "Haris Ahmed", 
-            area: "Model Town", 
+            address: "Model Town Lahore", 
             sector: "Johar Town Sector",
             university: "Riphah University",
             pickupTime: "8:50 AM",
             driverSector: "Johar Town Sector",
-            coordinates: { latitude: 33.6400, longitude: 73.1250 },
+            coordinates: null, // Will be geocoded
             stopOrder: 3
         },
     ], []);
+
+    // Load all coordinates on component mount
+    useEffect(() => {
+        loadAllCoordinates();
+    }, []);
+
+    const loadAllCoordinates = async () => {
+        setIsLoading(true);
+        try {
+            // Load driver start locations
+            const driverPromises = drivers.map(async (driver) => {
+                if (driver.routeRadius.length > 0) {
+                    const geocode = await googleMapsService.getGeocodeFromAddress(driver.routeRadius[0]);
+                    return { driverId: driver.id, location: geocode };
+                }
+                return null;
+            });
+
+            const driverResults = await Promise.all(driverPromises);
+            const newDriverLocations = {};
+            driverResults.forEach(result => {
+                if (result && result.location) {
+                    newDriverLocations[result.driverId] = result.location;
+                }
+            });
+
+            // Load passenger coordinates
+            const passengerPromises = passengers.map(async (passenger) => {
+                const geocode = await googleMapsService.getGeocodeFromAddress(passenger.address);
+                return { passengerId: passenger.id, coordinates: geocode };
+            });
+
+            const passengerResults = await Promise.all(passengerPromises);
+            const updatedPassengers = passengers.map(passenger => {
+                const result = passengerResults.find(r => r?.passengerId === passenger.id);
+                return {
+                    ...passenger,
+                    coordinates: result?.coordinates || { latitude: 33.6844, longitude: 73.0479 }
+                };
+            });
+
+            // Update state with loaded coordinates
+            setDriverLocations(newDriverLocations);
+            // Note: In a real app, you'd update passengers state with coordinates
+            // For now, we'll use the geocoded coordinates dynamically
+
+        } catch (error) {
+            console.error('Error loading coordinates:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const shifts = useMemo(() => [
         { id: "shift-morning", name: "Morning", time: "8:00 - 10:00 AM" },
@@ -250,18 +501,46 @@ export default function AssignRoutesScreen({ navigation }) {
         { id: "shift-evening", name: "Evening", time: "4:00 - 6:00 PM" },
     ], []);
 
-    // Common destination for all drivers
-    const commonDestination = useMemo(() => ({
-        name: "Riphah University",
-        location: "Al-Mizan II, I-14, Islamabad",
-        arrivalTime: "9:00 AM",
-        coordinates: RIPHAH_UNIVERSITY
-    }), []);
-
     const getAssignedPassengersForDriver = useCallback((driverId) => {
         const assigned = passengers.filter(p => assignments[p.id] === driverId);
         return assigned.sort((a, b) => a.stopOrder - b.stopOrder);
     }, [assignments, passengers]);
+
+    // Calculate optimized routes when assignments change
+    useEffect(() => {
+        const calculateRoutes = async () => {
+            const newRoutes = {};
+            const newOptimizedRoutes = {};
+
+            for (const driver of drivers) {
+                const assignedPassengers = getAssignedPassengersForDriver(driver.id);
+                if (assignedPassengers.length > 0) {
+                    const startLocation = driverLocations[driver.id] || { latitude: 33.6844, longitude: 73.0479 };
+                    const waypoints = [
+                        startLocation,
+                        ...assignedPassengers.map(p => p.coordinates || { latitude: 33.6844, longitude: 73.0479 }),
+                        riphahUniversity
+                    ];
+
+                    // Get optimized route from Google Maps
+                    const routeData = await googleMapsService.getOptimizedRoute(waypoints, true);
+                    newRoutes[driver.id] = routeData.route;
+                    newOptimizedRoutes[driver.id] = {
+                        distance: routeData.distance,
+                        duration: routeData.duration
+                    };
+                } else {
+                    newRoutes[driver.id] = [];
+                    newOptimizedRoutes[driver.id] = { distance: '0 km', duration: '0 min' };
+                }
+            }
+
+            setDriverRoutes(newRoutes);
+            setOptimizedRoutes(newOptimizedRoutes);
+        };
+
+        calculateRoutes();
+    }, [assignments, drivers, getAssignedPassengersForDriver, driverLocations, riphahUniversity]);
 
     // Simulate real-time driver locations
     useEffect(() => {
@@ -269,21 +548,20 @@ export default function AssignRoutesScreen({ navigation }) {
             const newLocations = {};
             drivers.forEach(driver => {
                 const assignedPassengers = getAssignedPassengersForDriver(driver.id);
-                if (assignedPassengers.length > 0) {
+                if (assignedPassengers.length > 0 && driverRoutes[driver.id]?.length > 0) {
                     const progress = Math.min((Date.now() % 60000) / 60000, 0.8);
-                    const currentStopIndex = Math.floor(progress * assignedPassengers.length);
-                    const currentPassenger = assignedPassengers[currentStopIndex];
+                    const routeIndex = Math.floor(progress * driverRoutes[driver.id].length);
                     
-                    if (currentPassenger) {
+                    if (driverRoutes[driver.id][routeIndex]) {
                         newLocations[driver.id] = {
-                            ...currentPassenger.coordinates,
-                            heading: `Heading to ${currentPassenger.name}`,
+                            ...driverRoutes[driver.id][routeIndex],
+                            heading: `En route to ${assignedPassengers[0]?.name || 'destination'}`,
                             speed: "25 km/h"
                         };
                     }
                 } else {
                     newLocations[driver.id] = {
-                        ...driver.startLocation,
+                        ...(driverLocations[driver.id] || { latitude: 33.6844, longitude: 73.0479 }),
                         heading: "Waiting for assignments",
                         speed: "0 km/h"
                     };
@@ -293,48 +571,77 @@ export default function AssignRoutesScreen({ navigation }) {
         }, 3000);
 
         return () => clearInterval(interval);
-    }, [assignments, drivers, getAssignedPassengersForDriver]);
+    }, [assignments, drivers, getAssignedPassengersForDriver, driverRoutes, driverLocations]);
 
-    // Calculate estimated times
+    // Calculate estimated times using Google Maps API
     useEffect(() => {
-        const newEstimatedTimes = {};
-        drivers.forEach(driver => {
-            const assignedPassengers = getAssignedPassengersForDriver(driver.id);
-            if (assignedPassengers.length > 0) {
-                const totalStops = assignedPassengers.length;
-                const baseTime = 15;
-                const totalTime = totalStops * baseTime;
-                newEstimatedTimes[driver.id] = {
-                    totalTime: `${totalTime} min`,
-                    arrivalTime: `~${8 + Math.floor(totalTime / 60)}:${(totalTime % 60).toString().padStart(2, '0')} AM`
-                };
-            } else {
-                newEstimatedTimes[driver.id] = {
-                    totalTime: "0 min",
-                    arrivalTime: "Not assigned"
-                };
+        const calculateEstimatedTimes = async () => {
+            const newEstimatedTimes = {};
+            
+            for (const driver of drivers) {
+                const assignedPassengers = getAssignedPassengersForDriver(driver.id);
+                if (assignedPassengers.length > 0) {
+                    const startLocation = driverLocations[driver.id] || { latitude: 33.6844, longitude: 73.0479 };
+                    const lastPassenger = assignedPassengers[assignedPassengers.length - 1];
+                    
+                    if (lastPassenger?.coordinates) {
+                        const etaData = await googleMapsService.getDistanceAndETA(
+                            startLocation,
+                            lastPassenger.coordinates
+                        );
+                        
+                        if (etaData) {
+                            // Add time for each stop (2 minutes per stop)
+                            const stopTime = assignedPassengers.length * 2;
+                            const totalMinutes = parseInt(etaData.duration) + stopTime;
+                            const arrivalHour = 8 + Math.floor(totalMinutes / 60);
+                            const arrivalMinute = totalMinutes % 60;
+                            
+                            newEstimatedTimes[driver.id] = {
+                                totalTime: `${totalMinutes} min`,
+                                arrivalTime: `~${arrivalHour}:${arrivalMinute.toString().padStart(2, '0')} AM`,
+                                distance: etaData.distance
+                            };
+                        } else {
+                            newEstimatedTimes[driver.id] = {
+                                totalTime: "Calculating...",
+                                arrivalTime: "Calculating...",
+                                distance: "Unknown"
+                            };
+                        }
+                    }
+                } else {
+                    newEstimatedTimes[driver.id] = {
+                        totalTime: "0 min",
+                        arrivalTime: "Not assigned",
+                        distance: "0 km"
+                    };
+                }
             }
-        });
-        setEstimatedTimes(newEstimatedTimes);
-    }, [assignments, drivers, getAssignedPassengersForDriver]);
+            
+            setEstimatedTimes(newEstimatedTimes);
+        };
+
+        calculateEstimatedTimes();
+    }, [assignments, drivers, getAssignedPassengersForDriver, driverLocations]);
 
     const getDriverAssignments = useCallback((driverId) => {
         return Object.values(assignments).filter(id => id === driverId).length;
     }, [assignments]);
 
     const getPassengersForDriverSector = useCallback((driverSector) => {
-        return passengers.filter(p => p.driverSector === driverSector && !assignments[p.id]);
+        return passengers.filter(p => p.sector === driverSector && !assignments[p.id]);
     }, [assignments, passengers]);
 
     const unassignedPassengers = useMemo(() => 
         passengers.filter(p => !assignments[p.id]), 
     [assignments, passengers]);
 
-    const quickAssign = useCallback((passengerId, driverId) => {
+    const quickAssign = useCallback(async (passengerId, driverId) => {
         const passenger = passengers.find(p => p.id === passengerId);
         const driver = drivers.find(d => d.id === driverId);
         
-        if (passenger && driver && passenger.driverSector === driver.routeSector) {
+        if (passenger && driver && passenger.sector === driver.routeSector) {
             setAssignments(prev => ({
                 ...prev,
                 [passengerId]: driverId
@@ -352,9 +659,10 @@ export default function AssignRoutesScreen({ navigation }) {
         });
     }, []);
 
-    const autoAssignAll = useCallback(() => {
-        setAssignments(prev => {
-            const newAssignments = { ...prev };
+    const autoAssignAll = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const newAssignments = {};
             
             drivers.forEach(driver => {
                 const sectorPassengers = getPassengersForDriverSector(driver.routeSector);
@@ -365,10 +673,15 @@ export default function AssignRoutesScreen({ navigation }) {
                 });
             });
             
-            return newAssignments;
-        });
-        setShowActionsMenu(false);
-        alert("🚀 All passengers auto-assigned to their sector drivers!");
+            setAssignments(newAssignments);
+            setShowActionsMenu(false);
+            alert("🚀 All passengers auto-assigned to their sector drivers!");
+        } catch (error) {
+            console.error('Error in auto assign:', error);
+            alert("Error in auto assignment");
+        } finally {
+            setIsLoading(false);
+        }
     }, [drivers, getDriverAssignments, getPassengersForDriverSector]);
 
     const clearAllAssignments = useCallback(() => {
@@ -386,7 +699,7 @@ export default function AssignRoutesScreen({ navigation }) {
     const getSectorStats = useCallback(() => {
         const stats = {};
         drivers.forEach(driver => {
-            const sectorPassengers = passengers.filter(p => p.driverSector === driver.routeSector);
+            const sectorPassengers = passengers.filter(p => p.sector === driver.routeSector);
             const assignedInSector = sectorPassengers.filter(p => assignments[p.id]).length;
             stats[driver.routeSector] = {
                 total: sectorPassengers.length,
@@ -399,35 +712,25 @@ export default function AssignRoutesScreen({ navigation }) {
     }, [assignments, drivers, passengers]);
 
     const getDriverRoute = useCallback((driverId) => {
-        const driver = drivers.find(d => d.id === driverId);
-        const assignedPassengers = getAssignedPassengersForDriver(driverId);
-        
-        if (assignedPassengers.length === 0) return [];
-
-        const route = [driver.startLocation];
-        assignedPassengers.forEach(passenger => {
-            route.push(passenger.coordinates);
-        });
-        route.push(RIPHAH_UNIVERSITY);
-        
-        return route;
-    }, [drivers, getAssignedPassengersForDriver]);
+        return driverRoutes[driverId] || [];
+    }, [driverRoutes]);
 
     const handleViewLiveTracking = useCallback(() => {
         setShowActionsMenu(false);
         
-        // Prepare drivers data with all required information
         const driversData = drivers.map(driver => ({
             ...driver,
             assignedPassengers: getAssignedPassengersForDriver(driver.id),
-            currentLocation: driverLocations[driver.id] || driver.startLocation
+            currentLocation: driverLocations[driver.id] || { latitude: 33.6844, longitude: 73.0479 },
+            route: driverRoutes[driver.id] || []
         }));
         
         console.log("Navigating with drivers data:", driversData);
         navigation.navigate('VanTracking', { 
-            drivers: driversData
+            drivers: driversData,
+            riphahUniversity
         });
-    }, [navigation, drivers, getAssignedPassengersForDriver, driverLocations]);
+    }, [navigation, drivers, getAssignedPassengersForDriver, driverLocations, driverRoutes, riphahUniversity]);
 
     const handleViewDriverRoute = useCallback((driver) => {
         setSelectedDriver(driver);
@@ -436,7 +739,6 @@ export default function AssignRoutesScreen({ navigation }) {
 
     const handleCloseDriverRouteModal = useCallback(() => {
         setShowDriverRouteModal(false);
-        // Small delay to prevent immediate re-render issues
         setTimeout(() => {
             setSelectedDriver(null);
         }, 100);
@@ -444,13 +746,43 @@ export default function AssignRoutesScreen({ navigation }) {
 
     const handleRemoveAssignmentFromModal = useCallback((passengerId) => {
         removeAssignment(passengerId);
-        // Don't close modal immediately, let user see the change
     }, [removeAssignment]);
 
     const sectorStats = getSectorStats();
 
-    // Individual Driver Route Modal - Fixed with stable reference
-    const DriverRouteModal = useCallback(() => (
+    // Optimize route for a specific driver
+    const handleOptimizeRoute = useCallback(async (driverId) => {
+        setIsLoading(true);
+        try {
+            const driver = drivers.find(d => d.id === driverId);
+            const assignedPassengers = getAssignedPassengersForDriver(driverId);
+            
+            if (assignedPassengers.length > 0) {
+                const startLocation = driverLocations[driverId] || { latitude: 33.6844, longitude: 73.0479 };
+                const waypoints = [
+                    startLocation,
+                    ...assignedPassengers.map(p => p.coordinates || { latitude: 33.6844, longitude: 73.0479 }),
+                    riphahUniversity
+                ];
+
+                const routeData = await googleMapsService.getOptimizedRoute(waypoints, true);
+                setDriverRoutes(prev => ({
+                    ...prev,
+                    [driverId]: routeData.route
+                }));
+                
+                alert(`✅ Route optimized! New distance: ${routeData.distance}, Duration: ${routeData.duration}`);
+            }
+        } catch (error) {
+            console.error('Error optimizing route:', error);
+            alert('Error optimizing route');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [drivers, getAssignedPassengersForDriver, driverLocations, riphahUniversity]);
+
+    // Individual Driver Route Modal
+    const DriverRouteModal = () => (
         <Modal
             visible={showDriverRouteModal}
             animationType="slide"
@@ -466,9 +798,15 @@ export default function AssignRoutesScreen({ navigation }) {
                         <Ionicons name="close" size={24} color="#333" />
                     </TouchableOpacity>
                     <Text style={styles.modalTitle}>
-                        {selectedDriver?.name}'s Complete Route
+                        {selectedDriver?.name}'s Route
                     </Text>
-                    <View style={styles.headerButton} />
+                    <TouchableOpacity 
+                        style={styles.optimizeButton}
+                        onPress={() => handleOptimizeRoute(selectedDriver?.id)}
+                    >
+                        <Ionicons name="refresh" size={20} color="#fff" />
+                        <Text style={styles.optimizeButtonText}>Optimize</Text>
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.mapContainer}>
@@ -480,7 +818,7 @@ export default function AssignRoutesScreen({ navigation }) {
                         {/* Destination Marker */}
                         <Marker
                             key="destination-university"
-                            coordinate={RIPHAH_UNIVERSITY}
+                            coordinate={riphahUniversity}
                             title="Riphah University"
                             description="Final Destination"
                         >
@@ -489,57 +827,56 @@ export default function AssignRoutesScreen({ navigation }) {
                             </View>
                         </Marker>
 
-                        {/* Driver Route */}
-                        {selectedDriver && (
-                            <>
-                                <Polyline
-                                    key={`polyline-${selectedDriver.id}`}
-                                    coordinates={getDriverRoute(selectedDriver.id)}
-                                    strokeColor={selectedDriver.routeColor}
-                                    strokeWidth={5}
-                                    lineDashPattern={[10, 10]}
-                                />
-                                
-                                {/* Start Point */}
-                                <Marker
-                                    key={`start-${selectedDriver.id}`}
-                                    coordinate={selectedDriver.startLocation}
-                                    title="Start Point"
-                                    description={`${selectedDriver.name}'s starting location`}
-                                >
-                                    <View style={[styles.startMarker, { backgroundColor: selectedDriver.color }]}>
-                                        <Ionicons name="play" size={16} color="#fff" />
-                                    </View>
-                                </Marker>
+                        {/* Driver Route from Google Maps */}
+                        {selectedDriver && driverRoutes[selectedDriver.id] && (
+                            <Polyline
+                                key={`polyline-${selectedDriver.id}`}
+                                coordinates={driverRoutes[selectedDriver.id]}
+                                strokeColor={selectedDriver.routeColor}
+                                strokeWidth={4}
+                            />
+                        )}
 
-                                {/* Passenger Stops */}
-                                {getAssignedPassengersForDriver(selectedDriver?.id).map((passenger, index) => (
-                                    <Marker
-                                        key={`marker-${selectedDriver.id}-${passenger.id}-${index}`}
-                                        coordinate={passenger.coordinates}
-                                        title={`Stop ${index + 1}: ${passenger.name}`}
-                                        description={`Pickup: ${passenger.pickupTime}`}
-                                    >
-                                        <View style={[styles.stopMarker, { backgroundColor: selectedDriver?.color }]}>
-                                            <Text style={styles.stopNumber}>{index + 1}</Text>
-                                        </View>
-                                    </Marker>
-                                ))}
+                        {/* Start Point */}
+                        {selectedDriver && driverLocations[selectedDriver.id] && (
+                            <Marker
+                                key={`start-${selectedDriver.id}`}
+                                coordinate={driverLocations[selectedDriver.id]}
+                                title="Start Point"
+                                description={`${selectedDriver.name}'s starting location`}
+                            >
+                                <View style={[styles.startMarker, { backgroundColor: selectedDriver.color }]}>
+                                    <Ionicons name="play" size={16} color="#fff" />
+                                </View>
+                            </Marker>
+                        )}
 
-                                {/* Current Driver Location */}
-                                {driverLocations[selectedDriver.id] && (
-                                    <Marker
-                                        key={`current-${selectedDriver.id}`}
-                                        coordinate={driverLocations[selectedDriver.id]}
-                                        title={`${selectedDriver.name} - Current Location`}
-                                        description={driverLocations[selectedDriver.id].heading}
-                                    >
-                                        <View style={[styles.driverMarker, { backgroundColor: selectedDriver.color }]}>
-                                            <Ionicons name="car-sport" size={16} color="#fff" />
-                                        </View>
-                                    </Marker>
-                                )}
-                            </>
+                        {/* Passenger Stops */}
+                        {selectedDriver && getAssignedPassengersForDriver(selectedDriver?.id).map((passenger, index) => (
+                            <Marker
+                                key={`marker-${selectedDriver.id}-${passenger.id}-${index}`}
+                                coordinate={passenger.coordinates || { latitude: 33.6844, longitude: 73.0479 }}
+                                title={`Stop ${index + 1}: ${passenger.name}`}
+                                description={`Pickup: ${passenger.pickupTime}`}
+                            >
+                                <View style={[styles.stopMarker, { backgroundColor: selectedDriver?.color }]}>
+                                    <Text style={styles.stopNumber}>{index + 1}</Text>
+                                </View>
+                            </Marker>
+                        ))}
+
+                        {/* Current Driver Location */}
+                        {selectedDriver && driverLocations[selectedDriver.id] && (
+                            <Marker
+                                key={`current-${selectedDriver.id}`}
+                                coordinate={driverLocations[selectedDriver.id]}
+                                title={`${selectedDriver.name} - Current Location`}
+                                description={driverLocations[selectedDriver.id].heading}
+                            >
+                                <View style={[styles.driverMarker, { backgroundColor: selectedDriver.color }]}>
+                                    <Ionicons name="car-sport" size={16} color="#fff" />
+                                </View>
+                            </Marker>
                         )}
                     </MapView>
                 </View>
@@ -563,7 +900,13 @@ export default function AssignRoutesScreen({ navigation }) {
                             <View style={styles.routeInfoItem}>
                                 <Ionicons name="time" size={20} color="#F39C12" />
                                 <Text style={styles.routeInfoText}>
-                                    {estimatedTimes[selectedDriver?.id]?.totalTime} total
+                                    {optimizedRoutes[selectedDriver?.id]?.duration || estimatedTimes[selectedDriver?.id]?.totalTime}
+                                </Text>
+                            </View>
+                            <View style={styles.routeInfoItem}>
+                                <Ionicons name="navigate" size={20} color="#9B59B6" />
+                                <Text style={styles.routeInfoText}>
+                                    {optimizedRoutes[selectedDriver?.id]?.distance || estimatedTimes[selectedDriver?.id]?.distance}
                                 </Text>
                             </View>
                         </View>
@@ -589,7 +932,7 @@ export default function AssignRoutesScreen({ navigation }) {
                                 </View>
                                 <View style={styles.stopInfo}>
                                     <Text style={styles.stopName}>{passenger.name}</Text>
-                                    <Text style={styles.stopAddress}>{passenger.area}</Text>
+                                    <Text style={styles.stopAddress}>{passenger.address}</Text>
                                     <Text style={styles.stopTime}>🕒 {passenger.pickupTime}</Text>
                                 </View>
                                 <TouchableOpacity 
@@ -615,10 +958,10 @@ export default function AssignRoutesScreen({ navigation }) {
                 </ScrollView>
             </SafeAreaView>
         </Modal>
-    ), [showDriverRouteModal, selectedDriver, driverLocations, estimatedTimes, getDriverAssignments, getAssignedPassengersForDriver, getDriverRoute, handleCloseDriverRouteModal, handleRemoveAssignmentFromModal]);
+    );
 
     // Actions Menu Modal
-    const ActionsMenuModal = useCallback(() => (
+    const ActionsMenuModal = () => (
         <Modal
             visible={showActionsMenu}
             transparent={true}
@@ -642,16 +985,19 @@ export default function AssignRoutesScreen({ navigation }) {
                     <TouchableOpacity 
                         style={styles.menuItem}
                         onPress={autoAssignAll}
+                        disabled={isLoading}
                     >
-                        <Ionicons name="flash" size={20} color="#F39C12" />
-                        <Text style={styles.menuItemText}>Auto Assign All</Text>
+                        <Ionicons name="rocket" size={20} color="#3498DB" />
+                        <Text style={styles.menuItemText}>
+                            {isLoading ? 'Auto-Assigning...' : 'Auto-Assign All'}
+                        </Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity 
                         style={styles.menuItem}
                         onPress={clearAllAssignments}
                     >
-                        <Ionicons name="trash-outline" size={20} color="#E74C3C" />
+                        <Ionicons name="trash" size={20} color="#E74C3C" />
                         <Text style={styles.menuItemText}>Clear All</Text>
                     </TouchableOpacity>
                     
@@ -659,471 +1005,313 @@ export default function AssignRoutesScreen({ navigation }) {
                         style={styles.menuItem}
                         onPress={handleViewLiveTracking}
                     >
-                        <Ionicons name="navigate" size={20} color="#3498DB" />
+                        <Ionicons name="locate" size={20} color="#F39C12" />
                         <Text style={styles.menuItemText}>Live Tracking</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                        style={[styles.menuItem, styles.cancelMenuItem]}
+                        onPress={() => setShowActionsMenu(false)}
+                    >
+                        <Ionicons name="close" size={20} color="#7F8C8D" />
+                        <Text style={[styles.menuItemText, styles.cancelMenuItemText]}>Cancel</Text>
                     </TouchableOpacity>
                 </View>
             </TouchableOpacity>
         </Modal>
-    ), [showActionsMenu, handleSave, autoAssignAll, clearAllAssignments, handleViewLiveTracking]);
+    );
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar backgroundColor="#afd826" barStyle="light-content" />
-
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+            
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity 
                     style={styles.backButton}
-                    onPress={() => navigation.navigate('TransporterDashboard')}
+                    onPress={() => navigation.goBack()}
                 >
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                    <Ionicons name="arrow-back" size={24} color="#333" />
                 </TouchableOpacity>
-                
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>Assign Routes</Text>
-                    <Text style={styles.headerSubtitle}>All routes to {commonDestination.name}</Text>
-                </View>
-                
+                <Text style={styles.headerTitle}>Assign Routes</Text>
                 <TouchableOpacity 
-                    style={styles.menuButton}
+                    style={styles.actionsButton}
                     onPress={() => setShowActionsMenu(true)}
                 >
-                    <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
+                    <Ionicons name="ellipsis-vertical" size={24} color="#333" />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView 
-                style={styles.container} 
-                showsVerticalScrollIndicator={false}
-                removeClippedSubviews={false} // Changed to false for better performance
-            >
-                {/* Common Destination Banner */}
-                <View style={styles.destinationBanner}>
-                    <View style={styles.destinationIcon}>
-                        <Ionicons name="school" size={28} color="#fff" />
-                    </View>
-                    <View style={styles.destinationInfo}>
-                        <Text style={styles.destinationName}>{commonDestination.name}</Text>
-                        <Text style={styles.destinationLocation}>{commonDestination.location}</Text>
-                        <Text style={styles.arrivalTime}>Arrival: {commonDestination.arrivalTime}</Text>
-                    </View>
-                    <TouchableOpacity 
-                        style={styles.viewMapButton}
-                        onPress={handleViewLiveTracking}
-                    >
-                        <Ionicons name="navigate" size={18} color="#3498DB" />
-                        <Text style={styles.viewMapText}>Live Track</Text>
-                    </TouchableOpacity>
+            {isLoading && (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color="#3498DB" />
+                    <Text style={styles.loadingText}>Loading map data...</Text>
                 </View>
+            )}
 
-                {/* Sector-wise Statistics */}
-                <View style={styles.sectorStats}>
-                    <Text style={styles.sectionTitle}>Sector-wise Assignment</Text>
+            {/* Shifts Tabs */}
+            <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.shiftsContainer}
+            >
+                {shifts.map(shift => (
+                    <TouchableOpacity
+                        key={shift.id}
+                        style={[
+                            styles.shiftTab,
+                            selectedShift === shift.id && styles.selectedShiftTab
+                        ]}
+                        onPress={() => setSelectedShift(shift.id)}
+                    >
+                        <Text style={[
+                            styles.shiftName,
+                            selectedShift === shift.id && styles.selectedShiftName
+                        ]}>
+                            {shift.name}
+                        </Text>
+                        <Text style={[
+                            styles.shiftTime,
+                            selectedShift === shift.id && styles.selectedShiftTime
+                        ]}>
+                            {shift.time}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            {/* Main Content */}
+            <ScrollView style={styles.content}>
+                {/* Sector Statistics */}
+                <View style={styles.statsContainer}>
+                    <Text style={styles.sectionTitle}>Sector Overview</Text>
                     <View style={styles.statsGrid}>
-                        {Object.entries(sectorStats).map(([sector, stats], index) => (
-                            <View key={`sector-${sector}-${index}`} style={[styles.sectorStatCard, { borderLeftColor: stats.color }]}>
-                                <Text style={styles.sectorName}>{sector}</Text>
-                                <View style={styles.sectorNumbers}>
-                                    <Text style={styles.sectorAssigned}>{stats.assigned}</Text>
-                                    <Text style={styles.sectorSeparator}>/</Text>
-                                    <Text style={styles.sectorTotal}>{stats.total}</Text>
-                                </View>
-                                <Text style={styles.sectorLabel}>assigned</Text>
-                                <View style={styles.progressBar}>
-                                    <View 
-                                        style={[
-                                            styles.progressFill, 
-                                            { 
-                                                width: `${(stats.assigned / stats.total) * 100}%`,
-                                                backgroundColor: stats.color
-                                            }
-                                        ]} 
-                                    />
-                                </View>
+                        {Object.entries(sectorStats).map(([sector, stats]) => (
+                            <View key={sector} style={styles.statCard}>
+                                <View style={[styles.statColor, { backgroundColor: stats.color }]} />
+                                <Text style={styles.statSector}>{sector}</Text>
+                                <Text style={styles.statNumbers}>
+                                    {stats.assigned}/{stats.total} assigned
+                                </Text>
+                                <Text style={styles.statUnassigned}>
+                                    {stats.unassigned} unassigned
+                                </Text>
                             </View>
                         ))}
                     </View>
                 </View>
 
-                
-
-                {/* Shift Selection */}
-                <View style={styles.shiftSection}>
-                    <Text style={styles.sectionTitle}>Select Shift</Text>
-                    <View style={styles.shiftButtons}>
-                        {shifts.map(shift => (
-                            <TouchableOpacity
-                                key={`shift-${shift.id}`}
-                                style={[
-                                    styles.shiftButton,
-                                    selectedShift === shift.id && styles.selectedShift
-                                ]}
-                                onPress={() => setSelectedShift(shift.id)}
-                            >
-                                <Text style={[
-                                    styles.shiftName,
-                                    selectedShift === shift.id && styles.selectedShiftText
-                                ]}>
-                                    {shift.name}
-                                </Text>
-                                <Text style={[
-                                    styles.shiftTime,
-                                    selectedShift === shift.id && styles.selectedShiftText
-                                ]}>
-                                    {shift.time}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
-                {/* Main Content Tabs */}
-                <View style={styles.tabBar}>
-                    <TouchableOpacity
-                        style={[styles.tab, selectedTab === "drivers" && styles.activeTab]}
-                        onPress={() => setSelectedTab("drivers")}
-                    >
-                        <Ionicons 
-                            name="car-sport" 
-                            size={20} 
-                            color={selectedTab === "drivers" ? "#fff" : "#666"} 
-                        />
-                        <Text style={[
-                            styles.tabText,
-                            selectedTab === "drivers" && styles.activeTabText
-                        ]}>
-                            Drivers ({drivers.length})
-                        </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                        style={[styles.tab, selectedTab === "passengers" && styles.activeTab]}
-                        onPress={() => setSelectedTab("passengers")}
-                    >
-                        <Ionicons 
-                            name="people" 
-                            size={20} 
-                            color={selectedTab === "passengers" ? "#fff" : "#666"} 
-                        />
-                        <Text style={[
-                            styles.tabText,
-                            selectedTab === "passengers" && styles.activeTabText
-                        ]}>
-                            Unassigned ({unassignedPassengers.length})
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Drivers View */}
-                {selectedTab === "drivers" && (
-                    <View style={styles.content}>
-                        {drivers.map(driver => {
-                            const assignedCount = getDriverAssignments(driver.id);
-                            const assignedPassengers = getAssignedPassengersForDriver(driver.id);
-                            const availablePassengers = getPassengersForDriverSector(driver.routeSector);
-                            const estimatedTime = estimatedTimes[driver.id];
-                            const driverLocation = driverLocations[driver.id];
-                            
-                            return (
-                                <View key={`driver-card-${driver.id}`} style={[styles.driverCard, { borderLeftColor: driver.color }]}>
-                                    <View style={styles.driverHeader}>
-                                        <View style={styles.driverInfo}>
-                                            <View style={[styles.driverAvatar, { backgroundColor: `${driver.color}20` }]}>
-                                                <Ionicons name="person" size={20} color={driver.color} />
-                                            </View>
-                                            <View style={styles.driverDetails}>
-                                                <View style={styles.driverNameRow}>
-                                                    <Text style={styles.driverName}>{driver.name}</Text>
-                                                    <View style={styles.ratingBadge}>
-                                                        <Ionicons name="star" size={12} color="#FFD700" />
-                                                        <Text style={styles.ratingText}>{driver.rating}</Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={styles.driverVehicle}>{driver.vehicle}</Text>
-                                                <Text style={styles.driverSector}>{driver.routeSector}</Text>
-                                                <Text style={styles.routeRadius}>
-                                                    📍 {driver.routeRadius.join(", ")}
-                                                </Text>
-                                                {driverLocation && (
-                                                    <Text style={styles.driverStatus}>
-                                                        🚗 {driverLocation.heading} • {driverLocation.speed}
-                                                    </Text>
-                                                )}
-                                            </View>
-                                        </View>
-                                        <View style={styles.driverStats}>
-                                            <View style={[
-                                                styles.capacityBadge,
-                                                assignedCount >= driver.capacity && styles.fullBadge
-                                            ]}>
-                                                <Text style={styles.capacityText}>
-                                                    {assignedCount}/{driver.capacity}
-                                                </Text>
-                                            </View>
-                                            {estimatedTime && (
-                                                <Text style={styles.etaText}>
-                                                    ETA: {estimatedTime.arrivalTime}
-                                                </Text>
-                                            )}
-                                        </View>
+                {/* Drivers List */}
+                <View style={styles.driversContainer}>
+                    <Text style={styles.sectionTitle}>Available Drivers</Text>
+                    {drivers.map(driver => {
+                        const assignedCount = getDriverAssignments(driver.id);
+                        const assignedPassengers = getAssignedPassengersForDriver(driver.id);
+                        const availableSeats = driver.capacity - assignedCount;
+                        
+                        return (
+                            <View key={driver.id} style={styles.driverCard}>
+                                <View style={styles.driverHeader}>
+                                    <View style={[styles.driverColor, { backgroundColor: driver.color }]} />
+                                    <View style={styles.driverInfo}>
+                                        <Text style={styles.driverName}>{driver.name}</Text>
+                                        <Text style={styles.driverDetails}>
+                                            {driver.vehicle} • {driver.routeSector}
+                                        </Text>
+                                        <Text style={styles.driverRating}>
+                                            ⭐ {driver.rating} • {driver.contact}
+                                        </Text>
                                     </View>
-
-                                    {/* Route Preview */}
-                                    {assignedPassengers.length > 0 && (
-                                        <View style={styles.routePreview}>
-                                            <View style={styles.routePreviewHeader}>
-                                                <Text style={styles.routePreviewTitle}>Route Stops</Text>
+                                    <View style={styles.driverStats}>
+                                        <Text style={[
+                                            styles.seatCount,
+                                            availableSeats === 0 ? styles.seatFull : styles.seatAvailable
+                                        ]}>
+                                            {assignedCount}/{driver.capacity}
+                                        </Text>
+                                        <Text style={styles.seatLabel}>Seats</Text>
+                                    </View>
+                                </View>
+                                
+                                <View style={styles.driverActions}>
+                                    <TouchableOpacity 
+                                        style={styles.actionButton}
+                                        onPress={() => handleViewDriverRoute(driver)}
+                                    >
+                                        <Ionicons name="map" size={16} color="#3498DB" />
+                                        <Text style={styles.actionButtonText}>View Route</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <TouchableOpacity 
+                                        style={styles.actionButton}
+                                        onPress={() => handleOptimizeRoute(driver.id)}
+                                        disabled={assignedCount === 0}
+                                    >
+                                        <Ionicons name="refresh" size={16} color="#27AE60" />
+                                        <Text style={styles.actionButtonText}>Optimize</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <View style={styles.routeInfo}>
+                                        <Text style={styles.routeTime}>
+                                            ⏱️ {optimizedRoutes[driver.id]?.duration || '0 min'}
+                                        </Text>
+                                        <Text style={styles.routeDistance}>
+                                            📍 {optimizedRoutes[driver.id]?.distance || '0 km'}
+                                        </Text>
+                                    </View>
+                                </View>
+                                
+                                {/* Assigned Passengers */}
+                                {assignedPassengers.length > 0 && (
+                                    <View style={styles.assignedPassengers}>
+                                        <Text style={styles.assignedTitle}>Assigned Passengers:</Text>
+                                        {assignedPassengers.map(passenger => (
+                                            <View key={passenger.id} style={styles.passengerItem}>
+                                                <View style={[styles.passengerDot, { backgroundColor: driver.color }]} />
+                                                <Text style={styles.passengerName}>{passenger.name}</Text>
+                                                <Text style={styles.passengerArea}>{passenger.address}</Text>
+                                                <Text style={styles.passengerTime}>{passenger.pickupTime}</Text>
                                                 <TouchableOpacity 
-                                                    style={styles.viewRouteButton}
-                                                    onPress={() => handleViewDriverRoute(driver)}
+                                                    style={styles.removeButton}
+                                                    onPress={() => removeAssignment(passenger.id)}
                                                 >
-                                                    <Text style={styles.viewRouteText}>View Full Route</Text>
-                                                    <Ionicons name="chevron-forward" size={16} color="#3498DB" />
+                                                    <Ionicons name="close-circle" size={18} color="#ff6b6b" />
                                                 </TouchableOpacity>
                                             </View>
-                                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                                <View style={styles.routeStops}>
-                                                    <View style={[styles.routeStop, styles.startStop]}>
-                                                        <Text style={styles.stopText}>Start</Text>
-                                                    </View>
-                                                    {assignedPassengers.map((passenger, index) => (
-                                                        <View key={`route-stop-${passenger.id}-${index}`} style={styles.routeStopContainer}>
-                                                            <View style={styles.routeLine} />
-                                                            <View style={[styles.routeStop, { backgroundColor: driver.color }]}>
-                                                                <Text style={styles.stopText}>{index + 1}</Text>
-                                                            </View>
-                                                            <Text style={styles.passengerStopName}>{passenger.name}</Text>
-                                                        </View>
-                                                    ))}
-                                                    <View style={styles.routeStopContainer}>
-                                                        <View style={styles.routeLine} />
-                                                        <View style={[styles.routeStop, styles.endStop]}>
-                                                            <Ionicons name="school" size={12} color="#fff" />
-                                                        </View>
-                                                        <Text style={styles.passengerStopName}>Riphah Uni</Text>
-                                                    </View>
-                                                </View>
-                                            </ScrollView>
-                                        </View>
-                                    )}
-
-                                    {/* Assigned Passengers */}
-                                    {assignedPassengers.length > 0 ? (
-                                        <View style={styles.assignedList}>
-                                            {assignedPassengers.map(passenger => (
-                                                <View key={`assigned-${passenger.id}`} style={styles.assignedItem}>
-                                                    <View style={styles.passengerInfo}>
-                                                        <Text style={styles.passengerName}>
-                                                            {passenger.name}
-                                                        </Text>
-                                                        <Text style={styles.passengerDetails}>
-                                                            {passenger.area} • {passenger.pickupTime}
-                                                        </Text>
-                                                    </View>
-                                                    <TouchableOpacity 
-                                                        style={styles.removeButton}
-                                                        onPress={() => removeAssignment(passenger.id)}
-                                                    >
-                                                        <Ionicons name="close" size={16} color="#ff6b6b" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            ))}
-                                        </View>
-                                    ) : (
-                                        <Text style={styles.noAssignment}>No passengers assigned in {driver.routeSector}</Text>
-                                    )}
-
-                                    {/* Quick Assign Buttons */}
-                                    {availablePassengers.length > 0 && assignedCount < driver.capacity && (
-                                        <View style={styles.quickAssignSection}>
-                                            <Text style={styles.quickAssignTitle}>Available in {driver.routeSector}:</Text>
-                                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                                <View style={styles.quickAssignButtons}>
-                                                    {availablePassengers.map(passenger => (
-                                                        <TouchableOpacity
-                                                            key={`quick-assign-${passenger.id}`}
-                                                            style={styles.quickAssignBtn}
-                                                            onPress={() => quickAssign(passenger.id, driver.id)}
-                                                        >
-                                                            <Text style={styles.quickAssignText}>
-                                                                {passenger.name}
-                                                            </Text>
-                                                        </TouchableOpacity>
-                                                    ))}
-                                                </View>
-                                            </ScrollView>
-                                        </View>
-                                    )}
-                                </View>
-                            );
-                        })}
-                    </View>
-                )}
-
-                {/* Passengers View */}
-                {selectedTab === "passengers" && (
-                    <View style={styles.content}>
-                        {unassignedPassengers.map(passenger => {
-                            const availableDrivers = drivers.filter(driver => 
-                                driver.routeSector === passenger.driverSector && 
-                                getDriverAssignments(driver.id) < driver.capacity
-                            );
-                            
-                            return (
-                                <View key={`passenger-card-${passenger.id}`} style={styles.passengerCard}>
-                                    <View style={styles.passengerHeader}>
-                                        <View style={styles.passengerAvatar}>
-                                            <Ionicons name="person-circle" size={32} color="#afd826" />
-                                        </View>
-                                        <View style={styles.passengerInfo}>
-                                            <Text style={styles.passengerName}>{passenger.name}</Text>
-                                            <Text style={styles.passengerLocation}>{passenger.area}</Text>
-                                            <Text style={styles.passengerSector}>{passenger.sector}</Text>
-                                            <Text style={styles.pickupTime}>🕒 {passenger.pickupTime}</Text>
-                                        </View>
+                                        ))}
                                     </View>
+                                )}
+                            </View>
+                        );
+                    })}
+                </View>
 
-                                    {/* Driver Selection */}
-                                    <View style={styles.driverSelection}>
-                                        <Text style={styles.assignTitle}>Assign to {passenger.driverSector} Driver:</Text>
-                                        <View style={styles.driverOptions}>
-                                            {availableDrivers.map(driver => (
-                                                <TouchableOpacity
-                                                    key={`driver-option-${driver.id}-${passenger.id}`}
-                                                    style={styles.driverOption}
-                                                    onPress={() => quickAssign(passenger.id, driver.id)}
-                                                >
-                                                    <View style={[styles.driverColor, { backgroundColor: driver.color }]} />
-                                                    <Text style={styles.driverOptionText}>
-                                                        {driver.name} ({getDriverAssignments(driver.id)}/{driver.capacity})
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                            {availableDrivers.length === 0 && (
-                                                <Text style={styles.noDriversText}>
-                                                    No available drivers in {passenger.driverSector}
-                                                </Text>
-                                            )}
-                                        </View>
-                                    </View>
-                                </View>
-                            );
-                        })}
-                    </View>
-                )}
+                {/* Unassigned Passengers */}
+                <View style={styles.passengersContainer}>
+                    <Text style={styles.sectionTitle}>
+                        Unassigned Passengers ({unassignedPassengers.length})
+                    </Text>
+                    {unassignedPassengers.map(passenger => (
+                        <View key={passenger.id} style={styles.passengerCard}>
+                            <View style={styles.passengerInfo}>
+                                <Text style={styles.passengerName}>{passenger.name}</Text>
+                                <Text style={styles.passengerArea}>{passenger.address}</Text>
+                                <Text style={styles.passengerSector}>{passenger.sector}</Text>
+                                <Text style={styles.passengerTime}>🕒 {passenger.pickupTime}</Text>
+                            </View>
+                            <View style={styles.quickAssignButtons}>
+                                {drivers
+                                    .filter(driver => 
+                                        driver.routeSector === passenger.sector && 
+                                        getDriverAssignments(driver.id) < driver.capacity
+                                    )
+                                    .map(driver => (
+                                        <TouchableOpacity
+                                            key={driver.id}
+                                            style={[styles.assignButton, { backgroundColor: driver.color }]}
+                                            onPress={() => quickAssign(passenger.id, driver.id)}
+                                        >
+                                            <Text style={styles.assignButtonText}>
+                                                Assign to {driver.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))
+                                }
+                            </View>
+                        </View>
+                    ))}
+                </View>
             </ScrollView>
 
             {/* Modals */}
-            <ActionsMenuModal />
-            <DriverRouteModal />
+            {ActionsMenuModal()}
+            {DriverRouteModal()}
         </SafeAreaView>
     );
 }
 
-// Styles remain the same as your original code...
 const styles = StyleSheet.create({
-    safeArea: {
+    container: {
         flex: 1,
-        backgroundColor: "#f8f9fa",
+        backgroundColor: '#f8f9fa',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: "#afd826",
         paddingHorizontal: 16,
         paddingVertical: 12,
-        elevation: 4,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e9ecef',
     },
     backButton: {
-        padding: 8,
-    },
-    headerTitleContainer: {
-        alignItems: 'center',
+        padding: 4,
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: '700',
-        color: '#fff',
-    },
-    headerSubtitle: {
-        fontSize: 12,
-        color: '#fff',
-        opacity: 0.9,
-        marginTop: 2,
-    },
-    menuButton: {
-        padding: 8,
-    },
-    container: {
-        flex: 1,
-        padding: 16,
-    },
-    destinationBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#3498DB',
-        padding: 20,
-        borderRadius: 16,
-        marginBottom: 16,
-        gap: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    destinationIcon: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    destinationInfo: {
-        flex: 1,
-    },
-    destinationName: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#fff',
-        marginBottom: 4,
-    },
-    destinationLocation: {
-        fontSize: 14,
-        color: '#fff',
-        opacity: 0.9,
-        marginBottom: 4,
-    },
-    arrivalTime: {
-        fontSize: 12,
-        color: '#fff',
-        opacity: 0.8,
         fontWeight: '600',
+        color: '#333',
     },
-    viewMapButton: {
-        flexDirection: 'row',
+    actionsButton: {
+        padding: 4,
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 12,
-        gap: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        zIndex: 1000,
     },
-    viewMapText: {
+    loadingText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: '#666',
+    },
+    shiftsContainer: {
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e9ecef',
+    },
+    shiftTab: {
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        marginHorizontal: 8,
+    },
+    selectedShiftTab: {
+        borderBottomWidth: 2,
+        borderBottomColor: '#3498DB',
+    },
+    shiftName: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#666',
+        textAlign: 'center',
+    },
+    selectedShiftName: {
         color: '#3498DB',
         fontWeight: '600',
-        fontSize: 14,
     },
-    sectorStats: {
-        marginBottom: 16,
+    shiftTime: {
+        fontSize: 12,
+        color: '#999',
+        textAlign: 'center',
+        marginTop: 2,
+    },
+    selectedShiftTime: {
+        color: '#3498DB',
+    },
+    content: {
+        flex: 1,
+    },
+    statsContainer: {
+        padding: 16,
+        backgroundColor: '#fff',
+        marginTop: 8,
     },
     sectionTitle: {
         fontSize: 16,
@@ -1134,510 +1322,223 @@ const styles = StyleSheet.create({
     statsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
-    },
-    sectorStatCard: {
-        flex: 1,
-        minWidth: '48%',
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
-        borderLeftWidth: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    sectorName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 8,
-    },
-    sectorNumbers: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    sectorAssigned: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#afd826',
-    },
-    sectorSeparator: {
-        fontSize: 16,
-        color: '#666',
-        marginHorizontal: 4,
-    },
-    sectorTotal: {
-        fontSize: 16,
-        color: '#666',
-        fontWeight: '500',
-    },
-    sectorLabel: {
-        fontSize: 12,
-        color: '#888',
-        marginBottom: 8,
-    },
-    progressBar: {
-        height: 4,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 2,
-        overflow: 'hidden',
-    },
-    progressFill: {
-        height: '100%',
-        borderRadius: 2,
-    },
-    quickStats: {
-        flexDirection: 'row',
-        gap: 12,
-        marginBottom: 20,
+        justifyContent: 'space-between',
     },
     statCard: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    statNumber: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#333',
-        marginVertical: 4,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#666',
-        fontWeight: '500',
-    },
-    shiftSection: {
-        marginBottom: 20,
-    },
-    shiftButtons: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    shiftButton: {
-        flex: 1,
-        padding: 16,
-        backgroundColor: '#fff',
-        borderRadius: 12,
+        width: '48%',
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#e0e0e0',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 1,
+        borderColor: '#e9ecef',
     },
-    selectedShift: {
-        backgroundColor: '#afd826',
-        borderColor: '#afd826',
-        shadowColor: '#afd826',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
+    statColor: {
+        width: 16,
+        height: 4,
+        borderRadius: 2,
+        marginBottom: 8,
     },
-    shiftName: {
+    statSector: {
         fontSize: 14,
         fontWeight: '600',
         color: '#333',
         marginBottom: 4,
     },
-    shiftTime: {
+    statNumbers: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#27AE60',
+        marginBottom: 2,
+    },
+    statUnassigned: {
         fontSize: 12,
-        color: '#666',
+        color: '#E74C3C',
     },
-    selectedShiftText: {
-        color: '#fff',
-    },
-    tabBar: {
-        flexDirection: 'row',
+    driversContainer: {
+        padding: 16,
         backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 4,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    tab: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 12,
-        borderRadius: 8,
-        gap: 8,
-    },
-    activeTab: {
-        backgroundColor: '#afd826',
-    },
-    tabText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#666',
-    },
-    activeTabText: {
-        color: '#fff',
-    },
-    content: {
-        gap: 16,
+        marginTop: 8,
     },
     driverCard: {
         backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 16,
-        borderLeftWidth: 4,
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
     },
     driverHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 16,
-    },
-    driverInfo: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        flex: 1,
-        gap: 16,
-    },
-    driverAvatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    driverDetails: {
-        flex: 1,
-    },
-    driverNameRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 4,
-    },
-    driverName: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#333',
-    },
-    ratingBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF9E6',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 8,
-        gap: 2,
-    },
-    ratingText: {
-        fontSize: 10,
-        fontWeight: '600',
-        color: '#F39C12',
-    },
-    driverVehicle: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 4,
-    },
-    driverSector: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#afd826',
-        marginBottom: 4,
-    },
-    routeRadius: {
-        fontSize: 12,
-        color: '#888',
-        fontStyle: 'italic',
-    },
-    driverStatus: {
-        fontSize: 11,
-        color: '#666',
-        fontStyle: 'italic',
-        marginTop: 4,
-    },
-    driverStats: {
-        alignItems: 'flex-end',
-        gap: 8,
-    },
-    capacityBadge: {
-        backgroundColor: '#f0f8e0',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    fullBadge: {
-        backgroundColor: '#ffebee',
-    },
-    capacityText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#afd826',
-    },
-    etaText: {
-        fontSize: 12,
-        color: '#3498DB',
-        fontWeight: '600',
-    },
-    routePreview: {
-        backgroundColor: '#f8f9fa',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 16,
-    },
-    routePreviewHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 12,
     },
-    routePreviewTitle: {
+    driverColor: {
+        width: 8,
+        height: 40,
+        borderRadius: 4,
+        marginRight: 12,
+    },
+    driverInfo: {
+        flex: 1,
+    },
+    driverName: {
         fontSize: 16,
         fontWeight: '600',
         color: '#333',
+        marginBottom: 2,
     },
-    viewRouteButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    viewRouteText: {
-        color: '#3498DB',
-        fontWeight: '600',
+    driverDetails: {
         fontSize: 14,
-    },
-    routeStops: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    routeStopContainer: {
-        alignItems: 'center',
-        gap: 8,
-    },
-    routeLine: {
-        width: 30,
-        height: 2,
-        backgroundColor: '#ddd',
-    },
-    routeStop: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 2,
-    },
-    startStop: {
-        backgroundColor: '#27AE60',
-    },
-    endStop: {
-        backgroundColor: '#E74C3C',
-    },
-    stopText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    passengerStopName: {
-        fontSize: 11,
         color: '#666',
-        textAlign: 'center',
-        maxWidth: 70,
+        marginBottom: 2,
     },
-    assignedList: {
-        gap: 12,
-        marginBottom: 16,
+    driverRating: {
+        fontSize: 12,
+        color: '#999',
     },
-    assignedItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    driverStats: {
         alignItems: 'center',
-        padding: 12,
-        backgroundColor: '#f8f9fa',
-        borderRadius: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
     },
-    passengerInfo: {
-        flex: 1,
+    seatCount: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    seatFull: {
+        color: '#E74C3C',
+    },
+    seatAvailable: {
+        color: '#27AE60',
+    },
+    seatLabel: {
+        fontSize: 12,
+        color: '#999',
+        marginTop: 2,
+    },
+    driverActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 8,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#e9ecef',
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 6,
+        marginRight: 8,
+    },
+    actionButtonText: {
+        fontSize: 12,
+        color: '#333',
+        marginLeft: 4,
+    },
+    routeInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    routeTime: {
+        fontSize: 12,
+        color: '#F39C12',
+        marginRight: 8,
+    },
+    routeDistance: {
+        fontSize: 12,
+        color: '#9B59B6',
+    },
+    assignedPassengers: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#e9ecef',
+    },
+    assignedTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    passengerItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f8f9fa',
+    },
+    passengerDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 8,
     },
     passengerName: {
         fontSize: 14,
-        fontWeight: '600',
         color: '#333',
-        marginBottom: 4,
+        marginRight: 8,
+        minWidth: 100,
     },
-    passengerDetails: {
+    passengerArea: {
         fontSize: 12,
         color: '#666',
+        flex: 1,
+        marginRight: 8,
+    },
+    passengerTime: {
+        fontSize: 12,
+        color: '#999',
+        marginRight: 8,
     },
     removeButton: {
-        padding: 6,
+        padding: 2,
     },
-    noAssignment: {
-        textAlign: 'center',
-        color: '#999',
-        fontStyle: 'italic',
-        padding: 20,
-        backgroundColor: '#f8f9fa',
-        borderRadius: 8,
-    },
-    quickAssignSection: {
+    passengersContainer: {
+        padding: 16,
+        backgroundColor: '#fff',
         marginTop: 8,
-    },
-    quickAssignTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 12,
-    },
-    quickAssignButtons: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    quickAssignBtn: {
-        backgroundColor: '#afd826',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 2,
-    },
-    quickAssignText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
+        marginBottom: 20,
     },
     passengerCard: {
         backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
     },
-    passengerHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-        marginBottom: 16,
-    },
-    passengerAvatar: {
-        // Icon handles the styling
-    },
-    passengerName: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#333',
-        marginBottom: 4,
-    },
-    passengerLocation: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 4,
+    passengerInfo: {
+        marginBottom: 12,
     },
     passengerSector: {
         fontSize: 12,
-        color: '#afd826',
-        fontWeight: '600',
-        marginBottom: 4,
+        color: '#666',
+        marginTop: 2,
     },
-    pickupTime: {
-        fontSize: 12,
-        color: '#3498DB',
-        fontWeight: '500',
-    },
-    driverSelection: {
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
-        paddingTop: 16,
-    },
-    assignTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 12,
-    },
-    driverOptions: {
-        gap: 12,
-    },
-    driverOption: {
+    quickAssignButtons: {
         flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f8f9fa',
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
-        gap: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        flexWrap: 'wrap',
     },
-    driverColor: {
-        width: 12,
-        height: 12,
+    assignButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         borderRadius: 6,
+        marginRight: 8,
+        marginBottom: 8,
     },
-    driverOptionText: {
-        fontSize: 14,
+    assignButtonText: {
+        fontSize: 12,
+        color: '#fff',
         fontWeight: '500',
-        color: '#333',
     },
-    noDriversText: {
-        fontSize: 14,
-        color: '#999',
-        fontStyle: 'italic',
-        textAlign: 'center',
-        padding: 20,
-    },
-
-    // Modal Styles
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1646,103 +1547,96 @@ const styles = StyleSheet.create({
     },
     actionsMenu: {
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 20,
-        width: '80%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 16,
+        borderRadius: 12,
+        padding: 16,
+        width: screenWidth * 0.8,
     },
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 16,
-        gap: 16,
+        paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        borderBottomColor: '#f8f9fa',
     },
     menuItemText: {
         fontSize: 16,
-        fontWeight: '600',
         color: '#333',
+        marginLeft: 12,
+        flex: 1,
+    },
+    cancelMenuItem: {
+        borderBottomWidth: 0,
+        justifyContent: 'center',
+    },
+    cancelMenuItemText: {
+        color: '#7F8C8D',
+        textAlign: 'center',
     },
     modalContainer: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#fff',
     },
     modalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#fff',
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+        borderBottomColor: '#e9ecef',
     },
     modalTitle: {
         fontSize: 18,
-        fontWeight: '700',
+        fontWeight: '600',
         color: '#333',
-    },
-    modalContent: {
         flex: 1,
+        textAlign: 'center',
+    },
+    optimizeButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#27AE60',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+    },
+    optimizeButtonText: {
+        fontSize: 12,
+        color: '#fff',
+        marginLeft: 4,
+        fontWeight: '500',
     },
     mapContainer: {
-        height: 300,
-        margin: 16,
-        borderRadius: 16,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
+        height: screenHeight * 0.4,
     },
     map: {
         flex: 1,
     },
     destinationMarker: {
-        backgroundColor: '#E74C3C',
         width: 40,
         height: 40,
         borderRadius: 20,
-        alignItems: 'center',
+        backgroundColor: '#9B59B6',
         justifyContent: 'center',
-        borderWidth: 3,
-        borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-        elevation: 6,
+        alignItems: 'center',
     },
     startMarker: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 3,
+        alignItems: 'center',
+        borderWidth: 2,
         borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
     },
     stopMarker: {
         width: 28,
         height: 28,
         borderRadius: 14,
-        alignItems: 'center',
         justifyContent: 'center',
+        alignItems: 'center',
         borderWidth: 2,
         borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
     },
     stopNumber: {
         color: '#fff',
@@ -1753,106 +1647,91 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 3,
+        alignItems: 'center',
+        borderWidth: 2,
         borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-        elevation: 6,
+    },
+    modalContent: {
+        flex: 1,
+        padding: 16,
     },
     routeDetails: {
-        backgroundColor: '#fff',
-        padding: 20,
-        margin: 16,
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        marginBottom: 20,
     },
     routeSectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 16,
+        fontWeight: '600',
         color: '#333',
-        marginBottom: 16,
+        marginBottom: 12,
     },
     routeInfo: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
     },
     routeInfoItem: {
+        flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        width: '48%',
+        marginBottom: 12,
     },
     routeInfoText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#333',
+        fontSize: 14,
+        color: '#666',
+        marginLeft: 8,
     },
     stopsList: {
-        backgroundColor: '#fff',
-        padding: 20,
-        margin: 16,
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        marginBottom: 20,
     },
     stopItem: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
-        gap: 16,
-    },
-    stopNumber: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    startStop: {
-        backgroundColor: '#27AE60',
-    },
-    endStop: {
-        backgroundColor: '#E74C3C',
-    },
-    stopNumberText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
+        borderBottomColor: '#f8f9fa',
     },
     stopInfo: {
         flex: 1,
+        marginLeft: 12,
     },
     stopName: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
         color: '#333',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     stopAddress: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     stopTime: {
         fontSize: 12,
-        color: '#3498DB',
-        fontWeight: '500',
+        color: '#999',
+    },
+    startStop: {
+        backgroundColor: '#3498DB',
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    endStop: {
+        backgroundColor: '#9B59B6',
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    stopNumberText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 'bold',
     },
     removeStopButton: {
         padding: 4,
-    },
-    headerButton: {
-        width: 40,
-    },
+    }
 });

@@ -27,9 +27,9 @@ mongoose.connect(MONGODB_URI, {
 
 // ==================== MICROSERVICES URLs ====================
 const MICROSERVICES = {
-  DRIVER: 'http://192.168.0.109:3001',
-  PASSENGER: 'http://192.168.0.109:5001',
-  GATEWAY: 'http://192.168.0.109:3005'
+  DRIVER: 'http://192.168.10.8:3001',
+  PASSENGER: 'http://192.168.10.8:5001',
+  GATEWAY: 'http://192.168.10.8:3005'
 };
 
 // ==================== SCHEMAS ====================

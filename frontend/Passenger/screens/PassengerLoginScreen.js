@@ -37,7 +37,7 @@ export default function PassengerLoginScreen({ navigation }) {
     setLoading(true);
     
     try {
-      const response = await fetch('http://192.168.0.109:5001/api/auth/login', {
+      const response = await fetch('http://192.168.10.8:5001/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ export default function PassengerLoginScreen({ navigation }) {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (token) {
-        const response = await fetch('http://192.168.0.109:5001/api/auth/check', {
+        const response = await fetch('http://192.168.10.3:5001/api/auth/check', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
