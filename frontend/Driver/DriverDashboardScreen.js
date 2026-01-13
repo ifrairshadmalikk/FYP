@@ -18,7 +18,7 @@ import { driverStyles } from "./driverStyles";
 const { width, height } = Dimensions.get("window");
 
 // API Base URL - Update this with your actual backend URL
-const API_BASE_URL = "http://192.168.10.3:3001/api";
+const API_BASE_URL = "http://192.168.0.109:3001/api";
 
 const UnifiedDriverDashboard = ({ navigation, route }) => {
   const { driver } = route.params || {};
@@ -1191,8 +1191,7 @@ const additionalStyles = {
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
-  },
-  
+  }
 };
 
 export default UnifiedDriverDashboard;
