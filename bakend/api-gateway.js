@@ -1,5 +1,5 @@
 // api-gateway.js - Frontend API Service
-const API_GATEWAY = 'http://192.168.10.8:3005';
+const API_GATEWAY = 'http://192.168.0.109:3005';
 
 export const gatewayService = {
   // Send notification
